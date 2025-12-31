@@ -23,15 +23,21 @@ const TypeArea = () => {
   };
 
   return (
-    <div>
-      <Textarea className="mb-2" value={RANDOM_TEXT} disabled />
-      <Textarea
+    <div className="flex flex-col space-y-2">
+      <textarea className="text-lg" value={RANDOM_TEXT} disabled />
+      <textarea
+        className={`text-lg rounded-md px-3 py-2 outline-none ring transition-colors focus-visible:ring-[3px] focus-visible:
+          ${
+            inputText
+              ? isError
+                ? "ring-red-500"
+                : "ring-green-500"
+              : "ring-white"
+          }
+        `}
         placeholder="Start Typing..."
         value={inputText}
         onChange={(e) => checkInputText(e.target.value)}
-        style={{
-          background: inputText ? (isError ? ERROR_COLOR : SUCCESS_COLOR) : "",
-        }}
       />
     </div>
   );
