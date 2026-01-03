@@ -1,102 +1,11 @@
+use crate::wss::manager::ChannelManager;
 use futures::{SinkExt, stream::StreamExt};
-use std::collections::HashMap;
-use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::{Mutex, mpsc},
+    sync::mpsc,
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-
-type Sender = mpsc::UnboundedSender<Message>;
-
-struct ChannelManager {
-    channels: Arc<Mutex<HashMap<String, Vec<Sender>>>>,
-}
-
-impl ChannelManager {
-    fn new() -> Self {
-        ChannelManager {
-            channels: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    async fn create_channel(&self, channel_name: String) {
-        let mut channels = self.channels.lock().await;
-        channels.insert(channel_name.clone(), Vec::new());
-    }
-
-    async fn random_channel(&self, sender: Sender) -> String {
-        let mut channels = self.channels.lock().await;
-
-        for key in channels.keys() {
-            if channels.get(key).unwrap().len() < 2 {
-                let available_channel = key.clone();
-                channels.get_mut(&available_channel).unwrap().push(sender);
-
-                if let Some(subscribers) = channels.get_mut(&available_channel) {
-                    for subscriber in subscribers.iter() {
-                        subscriber
-                            .send("RANDOM_TEXT:The quick brown fox jumps over the lazy dog.".into())
-                            .expect("Failed to broadcast message");
-                    }
-                }
-
-                return available_channel;
-            }
-        }
-
-        let new_channel_name = format!(
-            "room_{}",
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        );
-        channels.insert(new_channel_name.clone(), vec![sender]);
-
-        return new_channel_name;
-    }
-
-    async fn subscribe(&self, channel_name: String, sender: Sender) {
-        let mut channels = self.channels.lock().await;
-        channels.entry(channel_name).or_default().push(sender);
-    }
-
-    async fn broadcast(&self, channel_name: String, sender: Sender, message: Message) {
-        let mut channels = self.channels.lock().await;
-
-        if let Some(subscribers) = channels.get_mut(&channel_name) {
-            for subscriber in subscribers.iter() {
-                if subscriber.same_channel(&sender) {
-                    continue;
-                }
-                subscriber
-                    .send(message.clone())
-                    .expect("Failed to broadcast message");
-            }
-        }
-    }
-
-    async fn unsubscribe(&self, channel_name: String, sender: Sender) {
-        let mut channels = self.channels.lock().await;
-
-        if let Some(subscribers) = channels.get_mut(&channel_name) {
-            subscribers.retain(|s| !s.same_channel(&sender));
-        }
-
-        if let Some(subscribers) = channels.get(&channel_name) {
-            if subscribers.is_empty() {
-                channels.remove(&channel_name);
-            }
-        }
-    }
-
-    async fn delete_channel(&self, channel_name: String) {
-        let mut channels = self.channels.lock().await;
-        channels.remove(&channel_name);
-    }
-}
 
 async fn handle_connection(
     stream: TcpStream,
@@ -131,7 +40,7 @@ async fn handle_connection(
 
                     channel_manager.create_channel(room_name.to_string()).await;
                     channel_manager
-                        .subscribe(room_name.to_string(), tx.clone())
+                        .join_channel(room_name.to_string(), tx.clone())
                         .await;
                     current_channel = room_name.to_string();
 
@@ -142,7 +51,7 @@ async fn handle_connection(
                     let room_name = &text["JOIN_ROOM:".len()..];
 
                     channel_manager
-                        .subscribe(room_name.to_string(), tx.clone())
+                        .join_channel(room_name.to_string(), tx.clone())
                         .await;
                     current_channel = room_name.to_string();
 
@@ -159,7 +68,7 @@ async fn handle_connection(
                     let room_name = &text["LEAVE_ROOM:".len()..];
 
                     channel_manager
-                        .unsubscribe(room_name.to_string(), tx.clone())
+                        .leave_channel(room_name.to_string(), tx.clone())
                         .await;
                     current_channel.clear();
 
@@ -204,7 +113,15 @@ async fn handle_connection(
 
     if !current_channel.is_empty() {
         channel_manager
-            .unsubscribe(current_channel.clone(), tx.clone())
+            .broadcast(
+                current_channel.clone(),
+                tx.clone(),
+                Message::Text("User disconnected".into()),
+            )
+            .await;
+
+        channel_manager
+            .leave_channel(current_channel.clone(), tx.clone())
             .await;
 
         println!(
