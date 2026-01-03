@@ -1,4 +1,3 @@
-use crate::wss::rand_text::get_random_text;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -18,7 +17,6 @@ impl ChannelManager {
         }
     }
 
-    // TODO: Check if the user is already in the channel before creating channel
     pub async fn create_channel(&self, channel_name: String) {
         let mut channels = self.channels.lock().await;
         channels.insert(channel_name.clone(), Vec::new());
@@ -28,17 +26,9 @@ impl ChannelManager {
         let mut channels = self.channels.lock().await;
 
         for key in channels.keys() {
-            if channels.get(key).unwrap().len() < 2 {
+            if key.starts_with("room_") && channels.get(key).unwrap().len() < 2 {
                 let available_channel = key.clone();
                 channels.get_mut(&available_channel).unwrap().push(sender);
-
-                if let Some(subscribers) = channels.get_mut(&available_channel) {
-                    for subscriber in subscribers.iter() {
-                        subscriber
-                            .send(format!("RANDOM_TEXT:{}", get_random_text()).into())
-                            .expect("Failed to broadcast message");
-                    }
-                }
 
                 return available_channel;
             }
@@ -56,15 +46,12 @@ impl ChannelManager {
         return new_channel_name;
     }
 
-    // TODO: Check is subscribed
-    // TODO: Check if channel exists
-    // TODO: Send RANDOM_TEXT when subscribing
     pub async fn join_channel(&self, channel_name: String, sender: Sender) {
         let mut channels = self.channels.lock().await;
         channels.entry(channel_name).or_default().push(sender);
     }
 
-    pub async fn broadcast(&self, channel_name: String, sender: Sender, message: Message) {
+    pub async fn send_message(&self, channel_name: String, sender: Sender, message: Message) {
         let mut channels = self.channels.lock().await;
 
         if let Some(subscribers) = channels.get_mut(&channel_name) {
@@ -79,8 +66,18 @@ impl ChannelManager {
         }
     }
 
-    // TODO: Check if subscribed
-    // TODO: Check if channel exists
+    pub async fn broadcast_message(&self, channel_name: String, message: Message) {
+        let mut channels = self.channels.lock().await;
+
+        if let Some(subscribers) = channels.get_mut(&channel_name) {
+            for subscriber in subscribers.iter() {
+                subscriber
+                    .send(message.clone())
+                    .expect("Failed to broadcast message");
+            }
+        }
+    }
+
     pub async fn leave_channel(&self, channel_name: String, sender: Sender) {
         let mut channels = self.channels.lock().await;
 
@@ -98,5 +95,19 @@ impl ChannelManager {
     pub async fn delete_channel(&self, channel_name: String) {
         let mut channels = self.channels.lock().await;
         channels.remove(&channel_name);
+    }
+
+    pub async fn channel_exists(&self, channel_name: String) -> bool {
+        let channels = self.channels.lock().await;
+        channels.contains_key(&channel_name)
+    }
+
+    pub async fn channel_subscribers_count(&self, channel_name: String) -> usize {
+        let channels = self.channels.lock().await;
+        if let Some(subscribers) = channels.get(&channel_name) {
+            subscribers.len()
+        } else {
+            0
+        }
     }
 }

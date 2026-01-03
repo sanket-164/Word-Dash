@@ -1,4 +1,4 @@
-use crate::wss::manager::ChannelManager;
+use crate::wss::{manager::ChannelManager, rand_text::get_random_text};
 use futures::{SinkExt, stream::StreamExt};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
@@ -36,7 +36,30 @@ async fn handle_connection(
         match message {
             Ok(Message::Text(text)) => {
                 if text.starts_with("CREATE_ROOM:") {
+                    if !current_channel.is_empty() {
+                        tx.send(
+                            Message::Text(format!(
+                                "ERROR:You are already in a room: {}. Leave it before creating a room.",
+                                current_channel
+                            ).into()),
+                        )
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
                     let room_name = &text["CREATE_ROOM:".len()..];
+
+                    if channel_manager.channel_exists(room_name.to_string()).await {
+                        tx.send(Message::Text(
+                            format!(
+                                "ERROR:Room {} already exists. Choose a different name.",
+                                &text["CREATE_ROOM:".len()..]
+                            )
+                            .into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
 
                     channel_manager.create_channel(room_name.to_string()).await;
                     channel_manager
@@ -48,59 +71,151 @@ async fn handle_connection(
                 }
 
                 if text.starts_with("JOIN_ROOM:") {
+                    if !current_channel.is_empty() {
+                        tx.send(
+                            Message::Text(format!(
+                                "ERROR:You are already in a room: {}. Leave it before joining a room.",
+                                current_channel
+                            ).into()),
+                        )
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
                     let room_name = &text["JOIN_ROOM:".len()..];
+
+                    if channel_manager
+                        .channel_subscribers_count(room_name.to_string())
+                        .await
+                        == 2
+                    {
+                        tx.send(Message::Text(
+                            format!("ERROR:Room {} is full. Join a different room.", room_name)
+                                .into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
+                    if !channel_manager.channel_exists(room_name.to_string()).await {
+                        tx.send(Message::Text(
+                            format!(
+                                "ERROR:Room {} does not exist. Create it before joining.",
+                                room_name
+                            )
+                            .into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
 
                     channel_manager
                         .join_channel(room_name.to_string(), tx.clone())
                         .await;
                     current_channel = room_name.to_string();
 
+                    channel_manager
+                        .broadcast_message(
+                            current_channel.clone(),
+                            Message::Text(format!("RANDOM_TEXT:{}", get_random_text()).into()),
+                        )
+                        .await;
+
                     println!("Joined room {}", room_name);
                 }
 
                 if text.starts_with("RANDOM_ROOM") {
+                    if !current_channel.is_empty() {
+                        tx.send(
+                            Message::Text(format!(
+                                "ERROR:You are already in a room: {}. Leave it before joining a random room.",
+                                current_channel
+                            ).into()),
+                        )
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
                     current_channel = channel_manager.random_channel(tx.clone()).await;
+
+                    if channel_manager
+                        .channel_subscribers_count(current_channel.clone())
+                        .await
+                        < 2
+                    {
+                        continue;
+                    }
+
+                    channel_manager
+                        .broadcast_message(
+                            current_channel.clone(),
+                            Message::Text(format!("RANDOM_TEXT:{}", get_random_text()).into()),
+                        )
+                        .await;
 
                     println!("Joined a random room {}", current_channel);
                 }
 
                 if text.starts_with("LEAVE_ROOM:") {
+                    if current_channel.is_empty() {
+                        tx.send(Message::Text(
+                            "ERROR:You are not in any room to leave.".into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
                     let room_name = &text["LEAVE_ROOM:".len()..];
+
+                    if !channel_manager.channel_exists(room_name.to_string()).await {
+                        tx.send(Message::Text(
+                            format!("ERROR:Room {} does not exist.", room_name).into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
 
                     channel_manager
                         .leave_channel(room_name.to_string(), tx.clone())
                         .await;
+
+                    if channel_manager
+                        .channel_subscribers_count(room_name.to_string())
+                        .await
+                        == 0
+                    {
+                        channel_manager.delete_channel(room_name.to_string()).await;
+                        println!("Room {} deleted as it became empty", room_name);
+                    }
+
                     current_channel.clear();
 
                     println!("Left room {}", room_name);
                 }
 
-                if text.starts_with("DELETE_ROOM:") {
-                    let room_name = &text["DELETE_ROOM:".len()..];
-
-                    channel_manager.delete_channel(room_name.to_string()).await;
-                    current_channel.clear();
-
-                    println!("Deleted room {}", room_name);
-                }
-
                 if text.starts_with("MESSAGE:") {
+                    if current_channel.is_empty() {
+                        tx.send(Message::Text(
+                            "ERROR:You are not in any room. Join a room to send messages.".into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
                     let msg_content = &text["MESSAGE:".len()..];
 
-                    if !current_channel.is_empty() {
-                        channel_manager
-                            .broadcast(
-                                current_channel.clone(),
-                                tx.clone(),
-                                Message::Text(msg_content.into()),
-                            )
-                            .await;
+                    channel_manager
+                        .send_message(
+                            current_channel.clone(),
+                            tx.clone(),
+                            Message::Text(msg_content.into()),
+                        )
+                        .await;
 
-                        println!(
-                            "Broadcasted message to {}: {}",
-                            current_channel, msg_content
-                        );
-                    }
+                    println!(
+                        "Broadcasted message to {}: {}",
+                        current_channel, msg_content
+                    );
                 }
             }
             Err(e) => {
@@ -113,9 +228,8 @@ async fn handle_connection(
 
     if !current_channel.is_empty() {
         channel_manager
-            .broadcast(
+            .broadcast_message(
                 current_channel.clone(),
-                tx.clone(),
                 Message::Text("User disconnected".into()),
             )
             .await;
