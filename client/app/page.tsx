@@ -5,12 +5,16 @@ import { Spinner } from "@/components/ui/spinner";
 import ProgressBar from "@/components/ProgressBar";
 
 export default function Home() {
+  const socketRef: React.RefObject<WebSocket | null> = useRef(null);
+
   const [inputText, setInputText] = useState("");
   const [isError, setIsError] = useState(false);
-  const socketRef: React.RefObject<WebSocket | null> = useRef(null);
   const [enemyLetters, setEnemyLetters] = useState<number>(0);
   const [start, setStart] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [userName, setUserName] = useState<string>("");
+  const [winner, setWinner] = useState<string>("");
+
   const [randomText, setRandomText] = useState(
     "Random text will appear here once connected to a room."
   );
@@ -28,6 +32,18 @@ export default function Home() {
         const text = event.data.replace("RANDOM_TEXT:", "");
         setRandomText(text);
         setLoading(false);
+        return;
+      }
+
+      if (event.data.startsWith("WINNER:")) {
+        const winnerName = event.data.replace("WINNER:", "");
+        setWinner(winnerName);
+        return;
+      }
+
+      if (event.data.startsWith("ERROR:")) {
+        const errorMessage = event.data.replace("ERROR:", "");
+        alert(`Error from server: ${errorMessage}`);
         return;
       }
 
@@ -56,7 +72,7 @@ export default function Home() {
 
   const sendMessage = (message: string) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(`MESSAGE:${message}`);
+      socketRef.current.send(message);
     }
   };
 
@@ -74,7 +90,11 @@ export default function Home() {
     if (randomText.startsWith(text)) {
       setInputText(text);
       setIsError(false);
-      sendMessage(text.length.toString());
+      sendMessage(`PROGRESS:${text.length.toString()}`);
+
+      if (text === randomText) {
+        sendMessage(`BROADCAST:WINNER:${userName}`);
+      }
     } else {
       setIsError(true);
     }
@@ -86,12 +106,21 @@ export default function Home() {
 
       <div className="flex justify-center items-center min-h-[calc(100vh-64px)]">
         {!start && (
-          <button
-            onClick={initializeGame}
-            className="h-10 w-32 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-lg"
-          >
-            Start Game
-          </button>
+          <div className="flex flex-col items-center space-y-4">
+            <input
+              type="text"
+              placeholder="Enter your name"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              className="mb-4 px-3 py-2 border border-gray-300 rounded-md text-lg outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={initializeGame}
+              className="h-10 w-32 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-lg"
+            >
+              Start Game
+            </button>
+          </div>
         )}
 
         {start && loading && (
@@ -103,6 +132,17 @@ export default function Home() {
 
         {start && !loading && (
           <div className="container mx-auto p-4">
+            {winner && (
+              <div
+                className={`mb-4 p-4 ${
+                  winner === userName
+                    ? "bg-green-200 text-green-800"
+                    : "bg-red-200 text-red-800"
+                } rounded-md text-center text-xl font-semibold`}
+              >
+                {winner} has won the game!
+              </div>
+            )}
             <div className="flex flex-col mb-4 space-y-4">
               <ProgressBar
                 value={(inputText.length / randomText.length) * 100}

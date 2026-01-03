@@ -193,7 +193,7 @@ async fn handle_connection(
                     println!("Left room {}", room_name);
                 }
 
-                if text.starts_with("MESSAGE:") {
+                if text.starts_with("PROGRESS:") {
                     if current_channel.is_empty() {
                         tx.send(Message::Text(
                             "ERROR:You are not in any room. Join a room to send messages.".into(),
@@ -202,12 +202,51 @@ async fn handle_connection(
                         continue;
                     }
 
-                    let msg_content = &text["MESSAGE:".len()..];
+                    let msg_content = &text["PROGRESS:".len()..];
 
                     channel_manager
                         .send_message(
                             current_channel.clone(),
                             tx.clone(),
+                            Message::Text(msg_content.into()),
+                        )
+                        .await;
+
+                    println!(
+                        "Broadcasted message to {}: {}",
+                        current_channel, msg_content
+                    );
+                }
+
+                if text.starts_with("BROADCAST:") {
+                    if current_channel.is_empty() {
+                        tx.send(Message::Text(
+                            "ERROR:You are not in any room. Join a room to send messages.".into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
+                    if !channel_manager
+                        .channel_exists(current_channel.to_string())
+                        .await
+                    {
+                        tx.send(Message::Text(
+                            format!(
+                                "ERROR:Room {} does not exist. Join a room to broadcast messages.",
+                                current_channel
+                            )
+                            .into(),
+                        ))
+                        .expect("Failed to send message");
+                        continue;
+                    }
+
+                    let msg_content = &text["BROADCAST:".len()..];
+
+                    channel_manager
+                        .broadcast_message(
+                            current_channel.clone(),
                             Message::Text(msg_content.into()),
                         )
                         .await;
@@ -228,9 +267,10 @@ async fn handle_connection(
 
     if !current_channel.is_empty() {
         channel_manager
-            .broadcast_message(
+            .send_message(
                 current_channel.clone(),
-                Message::Text("User disconnected".into()),
+                tx.clone(),
+                Message::Text("ERROR: User disconnected".into()),
             )
             .await;
 
