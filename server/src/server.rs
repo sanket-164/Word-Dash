@@ -1,5 +1,6 @@
 use futures::{SinkExt, stream::StreamExt};
 use std::collections::HashMap;
+use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -23,6 +24,29 @@ impl ChannelManager {
     async fn create_channel(&self, channel_name: String) {
         let mut channels = self.channels.lock().await;
         channels.insert(channel_name.clone(), Vec::new());
+    }
+
+    async fn random_channel(&self, sender: Sender) -> String {
+        let mut channels = self.channels.lock().await;
+
+        for key in channels.keys() {
+            if channels.get(key).unwrap().len() < 2 {
+                let available_channel = key.clone();
+                channels.get_mut(&available_channel).unwrap().push(sender);
+                return available_channel;
+            }
+        }
+
+        let new_channel_name = format!(
+            "room_{}",
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+        channels.insert(new_channel_name.clone(), vec![sender]);
+
+        return new_channel_name;
     }
 
     async fn subscribe(&self, channel_name: String, sender: Sender) {
@@ -108,6 +132,12 @@ async fn handle_connection(
                     current_channel = room_name.to_string();
 
                     println!("Joined room {}", room_name);
+                }
+
+                if text.starts_with("RANDOM_ROOM") {
+                    current_channel = channel_manager.random_channel(tx.clone()).await;
+
+                    println!("Joined a random room");
                 }
 
                 if text.starts_with("LEAVE_ROOM:") {
