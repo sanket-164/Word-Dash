@@ -3,6 +3,7 @@ import TopBar from "@/components/TopBar";
 import { useState, useRef, useEffect } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import ProgressBar from "@/components/ProgressBar";
+import TypeArea from "@/components/TypeArea";
 
 export default function Home() {
   const socketRef: React.RefObject<WebSocket | null> = useRef(null);
@@ -14,6 +15,7 @@ export default function Home() {
   const [loading, setLoading] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("");
   const [winner, setWinner] = useState<string>("");
+  const [correctLetters, setCorrectLetters] = useState<number>(0);
 
   const [randomText, setRandomText] = useState(
     "Random text will appear here once connected to a room."
@@ -87,17 +89,21 @@ export default function Home() {
       return;
     }
 
+    setInputText(text);
+
     if (randomText.startsWith(text)) {
-      setInputText(text);
+      setCorrectLetters(text.length);
       setIsError(false);
       sendMessage(`PROGRESS:${text.length.toString()}`);
 
       if (text === randomText) {
         sendMessage(`BROADCAST:WINNER:${userName}`);
       }
-    } else {
-      setIsError(true);
+
+      return;
     }
+
+    setIsError(true);
   };
 
   return (
@@ -144,29 +150,24 @@ export default function Home() {
               </div>
             )}
             <div className="flex flex-col mb-4 space-y-4">
-              <ProgressBar
-                value={(inputText.length / randomText.length) * 100}
-              />
+              <ProgressBar value={(correctLetters / randomText.length) * 100} />
               <ProgressBar
                 value={(enemyLetters / randomText.length) * 100}
                 className="bg-red-500"
               />
             </div>
             <div className="flex flex-col space-y-2">
-              <p className="text-xl">{randomText}</p>
-              <textarea
-                className={`text-lg rounded-md px-3 py-2 outline-none ring transition-colors
-              ${
-                inputText
-                  ? isError
-                    ? "ring-red-500"
-                    : "ring-green-500"
-                  : "ring-white"
-              }
-              `}
-                placeholder="Start Typing..."
-                value={inputText}
-                onChange={(e) => checkInputText(e.target.value)}
+              <p className="text-3xl">{randomText}</p>
+              <TypeArea
+                className={`text-3xl ${
+                  inputText
+                    ? isError
+                      ? "ring-red-500"
+                      : "ring-green-500"
+                    : "ring-white"
+                }`}
+                inputText={inputText}
+                checkInputText={checkInputText}
               />
             </div>
           </div>
