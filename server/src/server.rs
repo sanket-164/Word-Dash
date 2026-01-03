@@ -33,6 +33,15 @@ impl ChannelManager {
             if channels.get(key).unwrap().len() < 2 {
                 let available_channel = key.clone();
                 channels.get_mut(&available_channel).unwrap().push(sender);
+
+                if let Some(subscribers) = channels.get_mut(&available_channel) {
+                    for subscriber in subscribers.iter() {
+                        subscriber
+                            .send("GAME_START".into())
+                            .expect("Failed to broadcast message");
+                    }
+                }
+
                 return available_channel;
             }
         }
@@ -74,6 +83,12 @@ impl ChannelManager {
 
         if let Some(subscribers) = channels.get_mut(&channel_name) {
             subscribers.retain(|s| !s.same_channel(&sender));
+        }
+
+        if let Some(subscribers) = channels.get(&channel_name) {
+            if subscribers.is_empty() {
+                channels.remove(&channel_name);
+            }
         }
     }
 
@@ -137,7 +152,7 @@ async fn handle_connection(
                 if text.starts_with("RANDOM_ROOM") {
                     current_channel = channel_manager.random_channel(tx.clone()).await;
 
-                    println!("Joined a random room");
+                    println!("Joined a random room {}", current_channel);
                 }
 
                 if text.starts_with("LEAVE_ROOM:") {
@@ -173,7 +188,7 @@ async fn handle_connection(
                             .await;
 
                         println!(
-                            "Broadcasted message to room {}: {}",
+                            "Broadcasted message to {}: {}",
                             current_channel, msg_content
                         );
                     }
@@ -185,6 +200,17 @@ async fn handle_connection(
             }
             Ok(_) => {}
         }
+    }
+
+    if !current_channel.is_empty() {
+        channel_manager
+            .unsubscribe(current_channel.clone(), tx.clone())
+            .await;
+
+        println!(
+            "User {} disconnected and removed from room {}",
+            address, current_channel
+        );
     }
 }
 

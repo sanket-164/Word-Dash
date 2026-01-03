@@ -1,13 +1,10 @@
 "use client";
 import { useState } from "react";
-import { Textarea } from "./ui/textarea";
 
 const TypeArea = () => {
   const [inputText, setInputText] = useState("");
   const [isError, setIsError] = useState(false);
   const RANDOM_TEXT = "The quick brown fox jumps over the lazy dog.";
-  const SUCCESS_COLOR = "#22C55E";
-  const ERROR_COLOR = "#EF4444";
 
   const checkInputText = (text: string) => {
     if (text.length > RANDOM_TEXT.length) {
@@ -34,7 +31,7 @@ const TypeArea = () => {
                 : "ring-green-500"
               : "ring-white"
           }
-        `}
+          `}
         placeholder="Start Typing..."
         value={inputText}
         onChange={(e) => checkInputText(e.target.value)}
