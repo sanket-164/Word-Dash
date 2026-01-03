@@ -37,7 +37,7 @@ impl ChannelManager {
                 if let Some(subscribers) = channels.get_mut(&available_channel) {
                     for subscriber in subscribers.iter() {
                         subscriber
-                            .send("GAME_START".into())
+                            .send("RANDOM_TEXT:The quick brown fox jumps over the lazy dog.".into())
                             .expect("Failed to broadcast message");
                     }
                 }
