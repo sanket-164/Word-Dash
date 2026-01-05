@@ -27,6 +27,14 @@ export default function DashPage() {
 
     const removeListener = addMessageListener((data) => {
       const message = data;
+      console.log("Message from server ", message);
+
+      if (message.startsWith("ROOM:")) {
+        const roomName = message.replace("ROOM:", "");
+        setRoom(roomName);
+        return;
+      }
+
       if (message.startsWith("RANDOM_TEXT:")) {
         const text = message.replace("RANDOM_TEXT:", "");
         setRandomText(text);
@@ -47,7 +55,6 @@ export default function DashPage() {
       }
 
       setEnemyLetters(parseInt(message));
-      console.log("Message from server ", message);
     });
 
     return removeListener;
@@ -58,12 +65,40 @@ export default function DashPage() {
       alert("Please enter your name to start the game.");
       return;
     }
+
     setStart(true);
     setLoading(true);
 
-    if (params.entryMode === "random") sendMessage("RANDOM_ROOM");
-    if (params.entryMode === "create") sendMessage(`CREATE_ROOM:${room}`);
-    if (params.entryMode === "join") sendMessage(`JOIN_ROOM:${room}`);
+    switch (params.entryMode) {
+      case "random":
+        if (room) {
+          alert("Room name should be empty for random games.");
+          setStart(false);
+          setLoading(false);
+        }
+        sendMessage("RANDOM_ROOM");
+        break;
+      case "create":
+        if (!room) {
+          alert("Please enter a room name to create a private game.");
+          setStart(false);
+          setLoading(false);
+        }
+        sendMessage(`CREATE_ROOM:${room}`);
+        break;
+      case "join":
+        if (!room) {
+          alert("Please enter a room name to join a private game.");
+          setStart(false);
+          setLoading(false);
+        }
+        sendMessage(`JOIN_ROOM:${room}`);
+        break;
+      default:
+        alert("Invalid entry mode.");
+        setStart(false);
+        setLoading(false);
+    }
   };
 
   const checkInputText = (text: string) => {
@@ -120,29 +155,37 @@ export default function DashPage() {
         {start && loading && (
           <div className="flex flex-col items-center space-y-2">
             <Spinner className="h-16 w-16 text-blue-500" />
-            <p>Searching...</p>
+            <p>
+              {params.entryMode === "random"
+                ? "Searching..."
+                : "Waiting for opponent..."}
+            </p>
           </div>
         )}
 
-        {winner && (
-          <div
-            className={`mb-4 p-4 ${
-              winner === userName
-                ? "bg-green-200 text-green-800"
-                : "bg-red-200 text-red-800"
-            } rounded-md text-center text-xl font-semibold`}
-          >
-            {winner} has won the game!
-          </div>
-        )}
+        <div className="flex flex-col items-center space-y-2">
+          {start && !loading && !winner && (
+            <TypeArea
+              text={randomText}
+              enemyProgress={enemyLetters}
+              onChange={checkInputText}
+            />
+          )}
 
-        {start && !loading && (
-          <TypeArea
-            text={randomText}
-            enemyProgress={enemyLetters}
-            onChange={checkInputText}
-          />
-        )}
+          {winner && (
+            <>
+              <div
+                className={`mb-4 p-4 ${
+                  winner === userName
+                    ? "bg-green-200 text-green-800"
+                    : "bg-red-200 text-red-800"
+                } rounded-md text-center text-xl font-semibold`}
+              >
+                {winner} has won the game!
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

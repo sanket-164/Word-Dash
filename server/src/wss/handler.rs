@@ -149,6 +149,13 @@ async fn handle_connection(
                     channel_manager
                         .broadcast_message(
                             current_channel.clone(),
+                            Message::Text(format!("ROOM:{}", current_channel.to_string()).into()),
+                        )
+                        .await;
+
+                    channel_manager
+                        .broadcast_message(
+                            current_channel.clone(),
                             Message::Text(format!("RANDOM_TEXT:{}", get_random_text()).into()),
                         )
                         .await;
@@ -166,6 +173,8 @@ async fn handle_connection(
                     }
 
                     let room_name = &text["LEAVE_ROOM:".len()..];
+
+                    println!("Attempting to leave room {}", room_name);
 
                     if !channel_manager.channel_exists(room_name.to_string()).await {
                         tx.send(Message::Text(
@@ -250,6 +259,13 @@ async fn handle_connection(
                             Message::Text(msg_content.into()),
                         )
                         .await;
+
+                    if msg_content.starts_with("WINNER:") {
+                        channel_manager
+                            .delete_channel(current_channel.clone())
+                            .await;
+                        current_channel.clear();
+                    }
 
                     println!(
                         "Broadcasted message to {}: {}",
