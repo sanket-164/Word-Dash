@@ -9,6 +9,11 @@ import {
   addMessageListener,
 } from "../../lib/websocket";
 
+interface ServerMessage {
+  type: "ROOM" | "TEXT" | "WINNER" | "ERROR" | "PROGRESS";
+  content: string | number;
+}
+
 export default function DashPage() {
   const [start, setStart] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("");
@@ -29,32 +34,32 @@ export default function DashPage() {
       const message = data;
       console.log("Message from server ", message);
 
-      if (message.startsWith("ROOM:")) {
-        const roomName = message.replace("ROOM:", "");
-        setRoom(roomName);
+      const serverMessage: ServerMessage = JSON.parse(message);
+
+      if (serverMessage.type === "ROOM") {
+        setRoom(serverMessage.content as string);
         return;
       }
 
-      if (message.startsWith("RANDOM_TEXT:")) {
-        const text = message.replace("RANDOM_TEXT:", "");
-        setRandomText(text);
+      if (serverMessage.type === "TEXT") {
+        setRandomText(serverMessage.content as string);
         setLoading(false);
         return;
       }
 
-      if (message.startsWith("WINNER:")) {
-        const winnerName = message.replace("WINNER:", "");
-        setWinner(winnerName);
+      if (serverMessage.type === "WINNER") {
+        setWinner(serverMessage.content as string);
         return;
       }
 
-      if (message.startsWith("ERROR:")) {
-        const errorMessage = message.replace("ERROR:", "");
-        alert(`Error from server: ${errorMessage}`);
+      if (serverMessage.type === "ERROR") {
+        alert(`Error from server: ${serverMessage.content as string}`);
         return;
       }
 
-      setEnemyLetters(parseInt(message));
+      if (serverMessage.type === "PROGRESS") {
+        setEnemyLetters(serverMessage.content as number);
+      }
     });
 
     return removeListener;
@@ -76,7 +81,12 @@ export default function DashPage() {
           setStart(false);
           setLoading(false);
         }
-        sendMessage("RANDOM_ROOM");
+        sendMessage(
+          JSON.stringify({
+            type: "JOIN",
+            room_name: "RANDOM_ROOM",
+          })
+        );
         break;
       case "create":
         if (!room) {
@@ -84,7 +94,12 @@ export default function DashPage() {
           setStart(false);
           setLoading(false);
         }
-        sendMessage(`CREATE_ROOM:${room}`);
+        sendMessage(
+          JSON.stringify({
+            type: "CREATE",
+            room_name: room,
+          })
+        );
         break;
       case "join":
         if (!room) {
@@ -92,7 +107,12 @@ export default function DashPage() {
           setStart(false);
           setLoading(false);
         }
-        sendMessage(`JOIN_ROOM:${room}`);
+        sendMessage(
+          JSON.stringify({
+            type: "JOIN",
+            room_name: room,
+          })
+        );
         break;
       default:
         alert("Invalid entry mode.");
@@ -107,10 +127,20 @@ export default function DashPage() {
     }
 
     if (randomText.startsWith(text)) {
-      sendMessage(`PROGRESS:${text.length.toString()}`);
+      sendMessage(
+        JSON.stringify({
+          type: "PROGRESS",
+          content: text.length,
+        })
+      );
 
       if (text === randomText) {
-        sendMessage(`BROADCAST:WINNER:${userName}`);
+        sendMessage(
+          JSON.stringify({
+            type: "WINNER",
+            content: userName,
+          })
+        );
       }
 
       return;
