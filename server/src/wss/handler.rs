@@ -1,3 +1,4 @@
+use crate::util::error;
 use crate::wss::{manager::ChannelManager, rand_text::get_random_text};
 use futures::{SinkExt, stream::StreamExt};
 use serde::Deserialize;
@@ -64,10 +65,7 @@ async fn handle_connection(
                     ClientMessage::CREATE { room_name } => {
                         if !current_channel.is_empty() {
                             let error_message = ServerMessage::ERROR {
-                                content: format!(
-                                    "You are already in a room: {}. Leave it before creating a room.",
-                                    current_channel
-                                ),
+                                content: error::already_in_room(room_name),
                             };
 
                             tx.send(Message::Text(
@@ -81,10 +79,7 @@ async fn handle_connection(
 
                         if channel_manager.channel_exists(room_name.to_string()).await {
                             let error_message = ServerMessage::ERROR {
-                                content: format!(
-                                    "Room {} already exists. Choose a different name.",
-                                    &room_name
-                                ),
+                                content: error::room_already_exists(room_name),
                             };
 
                             tx.send(Message::Text(
@@ -108,10 +103,7 @@ async fn handle_connection(
                     ClientMessage::JOIN { room_name } => {
                         if !current_channel.is_empty() {
                             let error_message = ServerMessage::ERROR {
-                                content: format!(
-                                    "You are already in a room: {}. Leave it before creating a room.",
-                                    current_channel
-                                ),
+                                content: error::already_in_room(current_channel.clone()),
                             };
 
                             tx.send(Message::Text(
@@ -130,10 +122,7 @@ async fn handle_connection(
                                 == 2
                             {
                                 let error_message = ServerMessage::ERROR {
-                                    content: format!(
-                                        "Room {} is full. Join a different room.",
-                                        &room_name
-                                    ),
+                                    content: error::room_is_full(room_name),
                                 };
 
                                 tx.send(Message::Text(
@@ -147,10 +136,7 @@ async fn handle_connection(
 
                             if !channel_manager.channel_exists(room_name.to_string()).await {
                                 let error_message = ServerMessage::ERROR {
-                                    content: format!(
-                                        "Room {} does not exist. Create it before joining.",
-                                        &room_name
-                                    ),
+                                    content: error::room_not_found(room_name),
                                 };
 
                                 tx.send(Message::Text(
@@ -214,7 +200,7 @@ async fn handle_connection(
                     ClientMessage::LEAVE { room_name } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::ERROR {
-                                content: String::from("You are not in any room to leave."),
+                                content: error::not_in_room(),
                             };
 
                             tx.send(Message::Text(
@@ -230,7 +216,7 @@ async fn handle_connection(
 
                         if !channel_manager.channel_exists(room_name.to_string()).await {
                             let error_message = ServerMessage::ERROR {
-                                content: format!("Room {} does not exist.", room_name),
+                                content: error::room_not_found(room_name),
                             };
 
                             tx.send(Message::Text(
@@ -263,9 +249,7 @@ async fn handle_connection(
                     ClientMessage::PROGRESS { content } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::ERROR {
-                                content: String::from(
-                                    "You are not in any room. Join a room to send progress.",
-                                ),
+                                content: error::not_in_room(),
                             };
 
                             tx.send(Message::Text(
@@ -297,9 +281,7 @@ async fn handle_connection(
                     ClientMessage::WINNER { content } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::ERROR {
-                                content: String::from(
-                                    "You are not in any room. Join a room to send messages.",
-                                ),
+                                content: error::not_in_room(),
                             };
                             tx.send(Message::Text(
                                 serde_json::to_string(&error_message)
@@ -315,10 +297,7 @@ async fn handle_connection(
                             .await
                         {
                             let error_message = ServerMessage::ERROR {
-                                content: format!(
-                                    "Room {} does not exist. Join a room to broadcast messages.",
-                                    current_channel
-                                ),
+                                content: error::room_not_found(current_channel.clone()),
                             };
 
                             tx.send(Message::Text(
@@ -354,9 +333,7 @@ async fn handle_connection(
                     ClientMessage::BROADCAST { content } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::ERROR {
-                                content: String::from(
-                                    "You are not in any room. Join a room to send messages.",
-                                ),
+                                content: error::not_in_room(),
                             };
                             tx.send(Message::Text(
                                 serde_json::to_string(&error_message)
@@ -372,10 +349,7 @@ async fn handle_connection(
                             .await
                         {
                             let error_message = ServerMessage::ERROR {
-                                content: format!(
-                                    "Room {} does not exist. Join a room to broadcast messages.",
-                                    current_channel
-                                ),
+                                content: error::room_not_found(current_channel.clone()),
                             };
 
                             tx.send(Message::Text(
@@ -406,7 +380,7 @@ async fn handle_connection(
 
     if !current_channel.is_empty() {
         let error_message = ServerMessage::ERROR {
-            content: String::from("Opponent disconnected"),
+            content: error::opponent_disconnected(),
         };
 
         channel_manager
