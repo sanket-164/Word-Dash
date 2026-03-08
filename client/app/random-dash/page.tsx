@@ -16,12 +16,10 @@ export default function RandomDashPage() {
   const [winner, setWinner] = useState<string>("");
 
   const [randomText, setRandomText] = useState(
-    "Random text will appear here once connected to a room."
+    "Random text will appear here once connected to a room.",
   );
 
   useEffect(() => {
-    const socket = connectWebSocket("ws://localhost:8080/ws");
-
     const removeListener = addMessageListener((data) => {
       const message = data;
       if (message.startsWith("RANDOM_TEXT:")) {

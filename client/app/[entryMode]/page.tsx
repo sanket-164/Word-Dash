@@ -1,4 +1,5 @@
 "use client";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
@@ -8,11 +9,10 @@ import {
   sendMessage,
   addMessageListener,
 } from "../../lib/websocket";
-
-interface ServerMessage {
-  type: "ROOM" | "TEXT" | "WINNER" | "ERROR" | "PROGRESS";
-  content: string | number;
-}
+import { ServerMessage } from "../types";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
+import * as anchor from "@coral-xyz/anchor";
+import { getProgram } from "@/lib/anchor";
 
 export default function DashPage() {
   const [start, setStart] = useState<boolean>(false);
@@ -22,22 +22,55 @@ export default function DashPage() {
   const [winner, setWinner] = useState<string>("");
   const [room, setRoom] = useState<string>("");
   const params = useParams<{ entryMode: string }>();
+  const wallet = useWallet();
 
   const [randomText, setRandomText] = useState(
-    "Random text will appear here once connected to a room."
+    "Random text will appear here once connected to a room.",
   );
+
+  async function initializeGame(roomName: string) {
+    if (!wallet.publicKey) return;
+
+    const program = getProgram(wallet as any);
+
+    const betAmount = new anchor.BN(1_000_000); // 0.001 SOL in lamports
+
+    const [gamePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("game"), wallet.publicKey.toBuffer()],
+      program.programId,
+    );
+
+    const [vaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("vault"), gamePda.toBuffer()],
+      program.programId,
+    );
+
+    await program.methods
+      .initializeGame(betAmount)
+      .accounts({
+        game: gamePda,
+        vault: vaultPda,
+        player1: wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    alert("Game initialized!");
+
+    setRoom(roomName);
+  }
 
   useEffect(() => {
     connectWebSocket("ws://localhost:8080/ws");
 
-    const removeListener = addMessageListener((data) => {
+    const removeListener = addMessageListener(async (data) => {
       const message = data;
       console.log("Message from server ", message);
 
       const serverMessage: ServerMessage = JSON.parse(message);
 
       if (serverMessage.type === "ROOM") {
-        setRoom(serverMessage.content as string);
+        await initializeGame(serverMessage.content as string);
         return;
       }
 
@@ -85,7 +118,7 @@ export default function DashPage() {
           JSON.stringify({
             type: "JOIN",
             room_name: "RANDOM_ROOM",
-          })
+          }),
         );
         break;
       case "create":
@@ -98,7 +131,7 @@ export default function DashPage() {
           JSON.stringify({
             type: "CREATE",
             room_name: room,
-          })
+          }),
         );
         break;
       case "join":
@@ -111,7 +144,7 @@ export default function DashPage() {
           JSON.stringify({
             type: "JOIN",
             room_name: room,
-          })
+          }),
         );
         break;
       default:
@@ -131,7 +164,7 @@ export default function DashPage() {
         JSON.stringify({
           type: "PROGRESS",
           content: text.length,
-        })
+        }),
       );
 
       if (text === randomText) {
@@ -139,7 +172,7 @@ export default function DashPage() {
           JSON.stringify({
             type: "WINNER",
             content: userName,
-          })
+          }),
         );
       }
 
@@ -175,8 +208,8 @@ export default function DashPage() {
               {params.entryMode === "random"
                 ? "Start"
                 : params.entryMode === "create"
-                ? "Create"
-                : "Join"}{" "}
+                  ? "Create"
+                  : "Join"}{" "}
               Game
             </button>
           </div>
