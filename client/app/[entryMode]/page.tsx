@@ -10,9 +10,7 @@ import {
   addMessageListener,
 } from "../../lib/websocket";
 import { ServerMessage } from "../types";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
-import * as anchor from "@coral-xyz/anchor";
-import { getProgram } from "@/lib/anchor";
+import { initializeGame } from "@/lib/anchor";
 
 export default function DashPage() {
   const [start, setStart] = useState<boolean>(false);
@@ -28,38 +26,6 @@ export default function DashPage() {
     "Random text will appear here once connected to a room.",
   );
 
-  async function initializeGame(roomName: string) {
-    if (!wallet.publicKey) return;
-
-    const program = getProgram(wallet as any);
-
-    const betAmount = new anchor.BN(1_000_000); // 0.001 SOL in lamports
-
-    const [gamePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("game"), wallet.publicKey.toBuffer()],
-      program.programId,
-    );
-
-    const [vaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vault"), gamePda.toBuffer()],
-      program.programId,
-    );
-
-    await program.methods
-      .initializeGame(betAmount)
-      .accounts({
-        game: gamePda,
-        vault: vaultPda,
-        player1: wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-
-    alert("Game initialized!");
-
-    setRoom(roomName);
-  }
-
   useEffect(() => {
     connectWebSocket("ws://localhost:8080/ws");
 
@@ -69,29 +35,9 @@ export default function DashPage() {
 
       const serverMessage: ServerMessage = JSON.parse(message);
 
-      if (serverMessage.type === "ROOM") {
-        await initializeGame(serverMessage.content as string);
+      if (serverMessage.type === "NewRoom") {
+        console.log("New room created: ", serverMessage.room_name);
         return;
-      }
-
-      if (serverMessage.type === "TEXT") {
-        setRandomText(serverMessage.content as string);
-        setLoading(false);
-        return;
-      }
-
-      if (serverMessage.type === "WINNER") {
-        setWinner(serverMessage.content as string);
-        return;
-      }
-
-      if (serverMessage.type === "ERROR") {
-        alert(`Error from server: ${serverMessage.content as string}`);
-        return;
-      }
-
-      if (serverMessage.type === "PROGRESS") {
-        setEnemyLetters(serverMessage.content as number);
       }
     });
 
@@ -116,8 +62,7 @@ export default function DashPage() {
         }
         sendMessage(
           JSON.stringify({
-            type: "JOIN",
-            room_name: "RANDOM_ROOM",
+            type: "GetRoom",
           }),
         );
         break;
