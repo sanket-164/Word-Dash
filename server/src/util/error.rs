@@ -29,7 +29,3 @@ pub fn room_not_found(room_name: String) -> String {
 pub fn not_in_room() -> String {
     "You are not in a room. Please join a room to play.".to_string()
 }
-
-pub fn opponent_disconnected() -> String {
-    "Your opponent has disconnected.".to_string()
-}

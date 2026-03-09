@@ -1,13 +1,23 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 
 pub type Sender = mpsc::UnboundedSender<Message>;
 
+#[derive(Clone)]
+pub struct SenderWrapper {
+    pub sender: Sender,
+    pub pub_key: String,
+}
+
+pub struct Opponent {
+    pub channel_name: String,
+    pub pub_key: Option<String>,
+}
+
 pub struct ChannelManager {
-    channels: Arc<Mutex<HashMap<String, Vec<Sender>>>>,
+    channels: Arc<Mutex<HashMap<String, Vec<SenderWrapper>>>>,
 }
 
 impl ChannelManager {
@@ -22,33 +32,49 @@ impl ChannelManager {
         channels.insert(channel_name.clone(), Vec::new());
     }
 
-    pub async fn random_channel(&self, sender: Sender) -> String {
-        let mut channels = self.channels.lock().await;
+    pub async fn available_channel(&self) -> Option<Opponent> {
+        let channels = self.channels.lock().await;
 
         for key in channels.keys() {
-            if key.starts_with("room_") && channels.get(key).unwrap().len() < 2 {
+            if key.starts_with("room_") && channels.get(key).unwrap().len() == 1 {
                 let available_channel = key.clone();
-                channels.get_mut(&available_channel).unwrap().push(sender);
 
-                return available_channel;
+                let opponent_sender = channels.get(&available_channel).unwrap().first().cloned();
+
+                return Some(Opponent {
+                    pub_key: opponent_sender.map(|s| s.pub_key),
+                    channel_name: available_channel,
+                });
             }
         }
 
-        let new_channel_name = format!(
-            "room_{}",
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        );
-        channels.insert(new_channel_name.clone(), vec![sender]);
-
-        return new_channel_name;
+        return None;
     }
 
-    pub async fn join_channel(&self, channel_name: String, sender: Sender) {
+    pub async fn join_channel(
+        &self,
+        channel_name: String,
+        sender: Sender,
+        pub_key: String,
+    ) -> Opponent {
         let mut channels = self.channels.lock().await;
-        channels.entry(channel_name).or_default().push(sender);
+        channels
+            .entry(channel_name.clone())
+            .or_default()
+            .push(SenderWrapper { sender, pub_key });
+
+        if channels.get(&channel_name).unwrap().len() == 2 {
+            let opponent_sender = channels.get_mut(&channel_name).unwrap().first().cloned();
+            return Opponent {
+                pub_key: opponent_sender.map(|s| s.pub_key),
+                channel_name: channel_name,
+            };
+        }
+
+        return Opponent {
+            pub_key: None,
+            channel_name: channel_name,
+        };
     }
 
     pub async fn send_message(&self, channel_name: String, sender: Sender, message: Message) {
@@ -56,10 +82,11 @@ impl ChannelManager {
 
         if let Some(subscribers) = channels.get_mut(&channel_name) {
             for subscriber in subscribers.iter() {
-                if subscriber.same_channel(&sender) {
+                if subscriber.sender.same_channel(&sender) {
                     continue;
                 }
                 subscriber
+                    .sender
                     .send(message.clone())
                     .expect("Failed to broadcast message");
             }
@@ -72,6 +99,7 @@ impl ChannelManager {
         if let Some(subscribers) = channels.get_mut(&channel_name) {
             for subscriber in subscribers.iter() {
                 subscriber
+                    .sender
                     .send(message.clone())
                     .expect("Failed to broadcast message");
             }
@@ -82,7 +110,7 @@ impl ChannelManager {
         let mut channels = self.channels.lock().await;
 
         if let Some(subscribers) = channels.get_mut(&channel_name) {
-            subscribers.retain(|s| !s.same_channel(&sender));
+            subscribers.retain(|s| !s.sender.same_channel(&sender));
         }
 
         if let Some(subscribers) = channels.get(&channel_name) {

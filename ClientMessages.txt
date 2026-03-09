@@ -1,0 +1,49 @@
+{
+    "type": "GetRoom"
+}
+
+{
+    "type": "CreateRoom",
+    "player_name": "Sanket",
+    "room_name": "room_1773056850",
+    "game_pda": "OOOOO",
+    "vault_pda": "AAAAA",
+    "pub_key": "player1"
+}
+
+{
+    "type": "JoinRoom",
+    "player_name": "Sanket",
+    "room_name": "room_1773056850",
+    "game_pda": "OOOOO",
+    "vault_pda": "AAAAA",
+    "pub_key": "player1"
+}
+
+{
+    "type": "StartDash"
+}
+
+{
+    "type": "SendProgress",
+    "player_name": "Sanket",
+    "progress": 5
+}
+
+{
+    "type": "GameWinner",
+    "player_name": "Sanket1",
+    "game_pda": "OOOOO",
+    "vault_pda": "AAAAA",
+    "pub_key": "player1"
+}
+
+{
+    "type": "LeaveRoom",
+    "room_name": "room_1773056850"
+}
+
+{
+    "type": "Broadcast",
+    "content": "LOL"
+}
