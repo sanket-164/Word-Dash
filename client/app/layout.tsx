@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SolanaProvider } from "./providers";
+import TopBar from "@/components/TopBar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <SolanaProvider>{children}</SolanaProvider>
+        <div className="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+          <SolanaProvider>
+            <TopBar />
+            {children}
+          </SolanaProvider>
+        </div>
       </body>
     </html>
   );

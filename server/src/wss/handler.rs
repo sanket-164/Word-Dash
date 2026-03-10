@@ -177,6 +177,7 @@ async fn handle_connection(
                                 };
 
                                 room_name_message = ServerMessage::AvailableRoom {
+                                    player_name: opponent_player.player_name.clone(),
                                     room_name: opponent.channel_name.clone(),
                                     game_pda: opponent_player.game_pda.clone(),
                                     vault_pda: opponent_player.vault_pda.clone(),

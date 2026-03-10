@@ -44,6 +44,7 @@ pub enum ServerMessage {
         room_name: String,
     },
     AvailableRoom {
+        player_name: String,
         room_name: String,
         game_pda: String,
         vault_pda: String,
