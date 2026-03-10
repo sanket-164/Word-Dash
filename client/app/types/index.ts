@@ -56,6 +56,8 @@ export type NewRoomMessage = {
 export type AvailableRoomMessage = {
   type: "AvailableRoom";
   room_name: string;
+  game_pda: string;
+  vault_pda: string;
 };
 
 export type CreatedRoomMessage = {

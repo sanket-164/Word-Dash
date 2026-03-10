@@ -9,8 +9,11 @@ import {
   sendMessage,
   addMessageListener,
 } from "../../lib/websocket";
-import { ServerMessage } from "../types";
-import { initializeGame } from "@/lib/anchor";
+import {
+  GameWinnerClientMessage,
+  SendProgressMessage,
+  ServerMessage,
+} from "../types";
 
 export default function DashPage() {
   const [start, setStart] = useState<boolean>(false);
@@ -20,6 +23,8 @@ export default function DashPage() {
   const [winner, setWinner] = useState<string>("");
   const [room, setRoom] = useState<string>("");
   const params = useParams<{ entryMode: string }>();
+  const [gamePDA, setGamePDA] = useState("gamePDA");
+  const [vaultPDA, setVaultPDA] = useState("vaultPDA");
   const wallet = useWallet();
 
   const [randomText, setRandomText] = useState(
@@ -36,13 +41,85 @@ export default function DashPage() {
       const serverMessage: ServerMessage = JSON.parse(message);
 
       if (serverMessage.type === "NewRoom") {
-        console.log("New room created: ", serverMessage.room_name);
+        const createRoomMessage = JSON.stringify({
+          type: "CreateRoom",
+          player_name: userName,
+          room_name: serverMessage.room_name,
+          game_pda: gamePDA,
+          vault_pda: vaultPDA,
+          pub_key: wallet.publicKey?.toString() || "",
+        });
+        sendMessage(createRoomMessage);
+
+        return;
+      }
+
+      if (serverMessage.type === "AvailableRoom") {
+        const joinRoomMessage = JSON.stringify({
+          type: "JoinRoom",
+          player_name: userName,
+          room_name: serverMessage.room_name,
+          game_pda: serverMessage.game_pda,
+          vault_pda: serverMessage.vault_pda,
+          pub_key: wallet.publicKey?.toString() || "",
+        });
+        sendMessage(joinRoomMessage);
+        return;
+      }
+
+      if (serverMessage.type === "JoinedRoom") {
+        setRoom(serverMessage.room_name);
+        setGamePDA(serverMessage.game_pda);
+        setVaultPDA(serverMessage.vault_pda);
+        return;
+      }
+
+      if (serverMessage.type === "OpponentJoined") {
+        const startDashMessage = JSON.stringify({
+          type: "StartDash",
+        });
+        sendMessage(startDashMessage);
+        return;
+      }
+
+      if (serverMessage.type === "Text") {
+        setRandomText(serverMessage.content);
+        setLoading(false);
+        return;
+      }
+
+      if (serverMessage.type === "OpponentProgress") {
+        setEnemyLetters(serverMessage.progress);
+        return;
+      }
+
+      if (serverMessage.type === "GameWinner") {
+        setWinner(serverMessage.player_name);
+        return;
+      }
+
+      if (serverMessage.type === "OpponentLeft") {
+        const gameWinnerMessage = JSON.stringify({
+          type: "GameWinner",
+          player_name: userName,
+          game_pda: gamePDA,
+          vault_pda: vaultPDA,
+          pub_key: wallet.publicKey?.toString() || "",
+        } as GameWinnerClientMessage);
+
+        sendMessage(gameWinnerMessage);
+        return;
+      }
+
+      if (serverMessage.type === "Error") {
+        console.error("Error from server: ", serverMessage.content);
+        alert(serverMessage.content);
         return;
       }
     });
 
     return removeListener;
-  }, []);
+  }, [userName]);
 
   const startGame = () => {
     if (!userName) {
@@ -59,6 +136,7 @@ export default function DashPage() {
           alert("Room name should be empty for random games.");
           setStart(false);
           setLoading(false);
+          return;
         }
         sendMessage(
           JSON.stringify({
@@ -71,26 +149,34 @@ export default function DashPage() {
           alert("Please enter a room name to create a private game.");
           setStart(false);
           setLoading(false);
+          return;
         }
-        sendMessage(
-          JSON.stringify({
-            type: "CREATE",
-            room_name: room,
-          }),
-        );
+        const createRoomMessage = JSON.stringify({
+          type: "CreateRoom",
+          player_name: userName,
+          room_name: room,
+          game_pda: gamePDA,
+          vault_pda: vaultPDA,
+          pub_key: wallet.publicKey?.toString() || "",
+        });
+        sendMessage(createRoomMessage);
         break;
       case "join":
         if (!room) {
           alert("Please enter a room name to join a private game.");
           setStart(false);
           setLoading(false);
+          return;
         }
-        sendMessage(
-          JSON.stringify({
-            type: "JOIN",
-            room_name: room,
-          }),
-        );
+        const joinRoomMessage = JSON.stringify({
+          type: "JoinRoom",
+          player_name: userName,
+          room_name: room,
+          game_pda: gamePDA,
+          vault_pda: vaultPDA,
+          pub_key: wallet.publicKey?.toString() || "",
+        });
+        sendMessage(joinRoomMessage);
         break;
       default:
         alert("Invalid entry mode.");
@@ -105,20 +191,23 @@ export default function DashPage() {
     }
 
     if (randomText.startsWith(text)) {
-      sendMessage(
-        JSON.stringify({
-          type: "PROGRESS",
-          content: text.length,
-        }),
-      );
+      const progressMessage = JSON.stringify({
+        type: "SendProgress",
+        player_name: userName,
+        progress: text.length,
+      } as SendProgressMessage);
+
+      sendMessage(progressMessage);
 
       if (text === randomText) {
-        sendMessage(
-          JSON.stringify({
-            type: "WINNER",
-            content: userName,
-          }),
-        );
+        const gameWinnerMessage = JSON.stringify({
+          type: "GameWinner",
+          player_name: userName,
+          game_pda: gamePDA,
+          vault_pda: vaultPDA,
+          pub_key: wallet.publicKey?.toString() || "",
+        } as GameWinnerClientMessage);
+        sendMessage(gameWinnerMessage);
       }
 
       return;
