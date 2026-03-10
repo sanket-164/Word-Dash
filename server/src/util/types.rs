@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
-    GetRoom {},
+    GetRoom {
+        player_name: String,
+    },
     CreateRoom {
         player_name: String,
         room_name: String,
@@ -43,18 +45,13 @@ pub enum ServerMessage {
     NewRoom {
         room_name: String,
     },
-    AvailableRoom {
-        player_name: String,
-        room_name: String,
-        game_pda: String,
-        vault_pda: String,
-    },
     CreatedRoom {
         room_name: String,
         game_pda: String,
         vault_pda: String,
     },
     JoinedRoom {
+        opponent_name: Option<String>,
         room_name: String,
         game_pda: String,
         vault_pda: String,

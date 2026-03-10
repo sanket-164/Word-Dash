@@ -11,9 +11,14 @@ import {
   addMessageListener,
 } from "../../lib/websocket";
 import {
+  CreateRoomMessage,
   GameWinnerClientMessage,
+  GetRoomMessage,
+  JoinRoomMessage,
+  LeaveRoomMessage,
   SendProgressMessage,
   ServerMessage,
+  StartDashMessage,
 } from "../types";
 
 export default function DashPage() {
@@ -50,28 +55,14 @@ export default function DashPage() {
           game_pda: gamePDA,
           vault_pda: vaultPDA,
           pub_key: wallet.publicKey?.toString() || "",
-        });
+        } as CreateRoomMessage);
         sendMessage(createRoomMessage);
 
         return;
       }
 
-      if (serverMessage.type === "AvailableRoom") {
-        setOpponentName(serverMessage.player_name);
-
-        const joinRoomMessage = JSON.stringify({
-          type: "JoinRoom",
-          player_name: userName,
-          room_name: serverMessage.room_name,
-          game_pda: serverMessage.game_pda,
-          vault_pda: serverMessage.vault_pda,
-          pub_key: wallet.publicKey?.toString() || "",
-        });
-        sendMessage(joinRoomMessage);
-        return;
-      }
-
       if (serverMessage.type === "JoinedRoom") {
+        setOpponentName(serverMessage.opponent_name || "Opponent");
         setRoom(serverMessage.room_name);
         setGamePDA(serverMessage.game_pda);
         setVaultPDA(serverMessage.vault_pda);
@@ -83,7 +74,7 @@ export default function DashPage() {
 
         const startDashMessage = JSON.stringify({
           type: "StartDash",
-        });
+        } as StartDashMessage);
         sendMessage(startDashMessage);
         return;
       }
@@ -100,6 +91,11 @@ export default function DashPage() {
       }
 
       if (serverMessage.type === "GameWinner") {
+        const leaveRoomMessage = JSON.stringify({
+          type: "LeaveRoom",
+          room_name: room,
+        } as LeaveRoomMessage);
+        sendMessage(leaveRoomMessage);
         setWinner(serverMessage.player_name);
         return;
       }
@@ -125,7 +121,7 @@ export default function DashPage() {
     });
 
     return removeListener;
-  }, [userName]);
+  }, [userName, room]);
 
   const startGame = () => {
     if (!userName) {
@@ -142,7 +138,8 @@ export default function DashPage() {
         sendMessage(
           JSON.stringify({
             type: "GetRoom",
-          }),
+            player_name: userName,
+          } as GetRoomMessage),
         );
         break;
       case "create":
@@ -159,7 +156,7 @@ export default function DashPage() {
           game_pda: gamePDA,
           vault_pda: vaultPDA,
           pub_key: wallet.publicKey?.toString() || "",
-        });
+        } as CreateRoomMessage);
         sendMessage(createRoomMessage);
         break;
       case "join":
@@ -176,7 +173,7 @@ export default function DashPage() {
           game_pda: gamePDA,
           vault_pda: vaultPDA,
           pub_key: wallet.publicKey?.toString() || "",
-        });
+        } as JoinRoomMessage);
         sendMessage(joinRoomMessage);
         break;
       default:

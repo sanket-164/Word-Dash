@@ -1,5 +1,6 @@
 export type GetRoomMessage = {
   type: "GetRoom";
+  player_name: string;
 };
 
 export type CreateRoomMessage = {
@@ -53,14 +54,6 @@ export type NewRoomMessage = {
   room_name: string;
 };
 
-export type AvailableRoomMessage = {
-  type: "AvailableRoom";
-  player_name: string;
-  room_name: string;
-  game_pda: string;
-  vault_pda: string;
-};
-
 export type CreatedRoomMessage = {
   type: "CreatedRoom";
   room_name: string;
@@ -70,9 +63,10 @@ export type CreatedRoomMessage = {
 
 export type JoinedRoomMessage = {
   type: "JoinedRoom";
+  opponent_name: string | null;
   room_name: string;
-  game_pda: string,
-  vault_pda: string,
+  game_pda: string;
+  vault_pda: string;
 };
 
 export type OpponentJoinedMessage = {
@@ -118,7 +112,6 @@ export type ClientMessage =
   | BroadcastMessage;
 
 export type ServerMessage = NewRoomMessage
-  | AvailableRoomMessage
   | CreatedRoomMessage
   | JoinedRoomMessage
   | OpponentJoinedMessage
