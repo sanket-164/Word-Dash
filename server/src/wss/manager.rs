@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
@@ -11,59 +11,74 @@ pub struct SenderWrapper {
     pub pub_key: String,
 }
 
+pub struct Room {
+    pub player1: Option<SenderWrapper>,
+    pub player2: Option<SenderWrapper>,
+}
+
 pub struct Opponent {
     pub channel_name: String,
     pub pub_key: Option<String>,
 }
 
 pub struct ChannelManager {
-    channels: Arc<Mutex<HashMap<String, Vec<SenderWrapper>>>>,
-    available_channels: Arc<Mutex<Vec<String>>>,
+    channels: Arc<Mutex<HashMap<String, Room>>>,
+    available_channels: Arc<Mutex<HashSet<String>>>,
 }
 
 impl ChannelManager {
     pub fn new() -> Self {
         ChannelManager {
             channels: Arc::new(Mutex::new(HashMap::new())),
-            available_channels: Arc::new(Mutex::new(Vec::new())),
+            available_channels: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
-    pub async fn create_channel(&self, channel_name: String) {
-        let mut channels = self.channels.lock().await;
-        channels.insert(channel_name.clone(), Vec::new());
+    pub async fn create_channel(&self, channel_name: &str) {
+        self.channels.lock().await.insert(
+            channel_name.to_string(),
+            Room {
+                player1: None,
+                player2: None,
+            },
+        );
     }
 
-    pub async fn available_channel(&self) -> String {
-        return self
-            .available_channels
-            .lock()
-            .await
-            .first()
-            .cloned()
-            .unwrap_or_else(|| String::new());
+    pub async fn available_channel(&self) -> Option<String> {
+        self.available_channels.lock().await.iter().next().cloned()
     }
 
     pub async fn join_channel(
         &self,
-        channel_name: String,
+        channel_name: &str,
         sender: Sender,
         pub_key: String,
     ) -> Opponent {
         let mut channels = self.channels.lock().await;
-        channels
-            .entry(channel_name.clone())
-            .or_default()
-            .push(SenderWrapper { sender, pub_key });
 
-        if channels.get(&channel_name).unwrap().len() == 2 {
-            let opponent_sender = channels.get_mut(&channel_name).unwrap().first().cloned();
-            self.available_channels
-                .lock()
-                .await
-                .retain(|c| c != &channel_name);
+        let channel_name = channel_name.to_string();
+
+        channels.entry(channel_name.clone()).and_modify(|players| {
+            if players.player1.is_none() {
+                players.player1 = Some(SenderWrapper { sender, pub_key });
+            } else if players.player2.is_none() {
+                players.player2 = Some(SenderWrapper { sender, pub_key });
+            }
+        });
+
+        let opponent_pub_key = channels.get(&channel_name).and_then(|room| {
+            if room.player1.is_some() && room.player2.is_some() {
+                room.player1.as_ref().map(|p| p.pub_key.clone())
+            } else {
+                None
+            }
+        });
+
+        if opponent_pub_key.is_some() {
+            self.available_channels.lock().await.remove(&channel_name);
+
             return Opponent {
-                pub_key: opponent_sender.map(|s| s.pub_key),
+                pub_key: opponent_pub_key,
                 channel_name: channel_name,
             };
         }
@@ -72,27 +87,34 @@ impl ChannelManager {
             self.available_channels
                 .lock()
                 .await
-                .push(channel_name.clone());
+                .insert(channel_name.clone());
         }
 
-        return Opponent {
+        Opponent {
             pub_key: None,
             channel_name: channel_name,
-        };
+        }
     }
 
     pub async fn send_message(&self, channel_name: &str, sender: Sender, message: Message) {
-        let mut channels = self.channels.lock().await;
+        let senders = {
+            let channels = self.channels.lock().await;
 
-        if let Some(subscribers) = channels.get_mut(channel_name) {
-            for subscriber in subscribers.iter() {
-                if subscriber.sender.same_channel(&sender) {
-                    continue;
+            channels.get(channel_name).map(|room| {
+                [
+                    room.player1.as_ref().map(|s| s.sender.clone()),
+                    room.player2.as_ref().map(|s| s.sender.clone()),
+                ]
+            })
+        };
+
+        if let Some(senders) = senders {
+            for s in senders.into_iter().flatten() {
+                if !s.same_channel(&sender) {
+                    if let Err(e) = s.send(message.clone()) {
+                        eprintln!("Error while sending message: {}", e);
+                    }
                 }
-                subscriber
-                    .sender
-                    .send(message.clone())
-                    .expect("Failed to broadcast message");
             }
         }
     }
@@ -101,15 +123,18 @@ impl ChannelManager {
         let senders = {
             let channels = self.channels.lock().await;
 
-            channels
-                .get(channel_name)
-                .map(|subs| subs.iter().map(|s| s.sender.clone()).collect::<Vec<_>>())
+            channels.get(channel_name).map(|room| {
+                [
+                    room.player1.as_ref().map(|s| s.sender.clone()),
+                    room.player2.as_ref().map(|s| s.sender.clone()),
+                ]
+            })
         };
 
         if let Some(senders) = senders {
-            for sender in senders {
+            for sender in senders.into_iter().flatten() {
                 if let Err(e) = sender.send(message.clone()) {
-                    eprintln!("Send failed: {}", e);
+                    eprintln!("Error while broadcasting message: {}", e);
                 }
             }
         }
@@ -118,43 +143,76 @@ impl ChannelManager {
     pub async fn leave_channel(&self, channel_name: &str, sender: Sender) {
         let mut channels = self.channels.lock().await;
 
-        if let Some(subscribers) = channels.get_mut(channel_name) {
-            subscribers.retain(|s| !s.sender.same_channel(&sender));
+        let mut should_remove = false;
+
+        if let Some(room) = channels.get_mut(channel_name) {
+            if room
+                .player1
+                .as_ref()
+                .map_or(false, |s| s.sender.same_channel(&sender))
+            {
+                room.player1 = None;
+            } else if room
+                .player2
+                .as_ref()
+                .map_or(false, |s| s.sender.same_channel(&sender))
+            {
+                room.player2 = None;
+            }
+
+            if room.player1.is_none() && room.player2.is_none() {
+                should_remove = true;
+            }
         }
 
-        if let Some(subscribers) = channels.get(channel_name) {
-            if subscribers.is_empty() {
-                channels.remove(channel_name);
-            }
+        if should_remove {
+            channels.remove(channel_name);
         }
     }
 
     pub async fn delete_channel(&self, channel_name: &str) {
-        let mut channels = self.channels.lock().await;
-        channels.remove(channel_name);
+        self.channels.lock().await.remove(channel_name);
     }
 
     pub async fn channel_exists(&self, channel_name: &str) -> bool {
-        let channels = self.channels.lock().await;
-        channels.contains_key(channel_name)
+        self.channels.lock().await.contains_key(channel_name)
     }
 
-    pub async fn channel_subscribers_count(&self, channel_name: &str) -> usize {
+    pub async fn channel_full(&self, channel_name: &str) -> bool {
         let channels = self.channels.lock().await;
-        if let Some(subscribers) = channels.get(channel_name) {
-            subscribers.len()
-        } else {
-            0
-        }
+
+        channels.get(channel_name).map_or(false, |room| {
+            room.player1.is_some() && room.player2.is_some()
+        })
+    }
+
+    pub async fn channel_empty(&self, channel_name: &str) -> bool {
+        let channels = self.channels.lock().await;
+
+        channels.get(channel_name).map_or(false, |room| {
+            room.player1.is_none() && room.player2.is_none()
+        })
     }
 
     pub async fn get_player_pub_key(&self, channel_name: &str, sender: &Sender) -> Option<String> {
         let channels = self.channels.lock().await;
 
-        channels
-            .get(channel_name)?
-            .iter()
-            .find(|subscriber| subscriber.sender.same_channel(sender))
-            .map(|subscriber| subscriber.pub_key.clone())
+        channels.get(channel_name).and_then(|room| {
+            if room
+                .player1
+                .as_ref()
+                .map_or(false, |s| s.sender.same_channel(sender))
+            {
+                room.player1.as_ref().map(|s| s.pub_key.clone())
+            } else if room
+                .player2
+                .as_ref()
+                .map_or(false, |s| s.sender.same_channel(sender))
+            {
+                room.player2.as_ref().map(|s| s.pub_key.clone())
+            } else {
+                None
+            }
+        })
     }
 }
