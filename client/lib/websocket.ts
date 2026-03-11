@@ -26,8 +26,11 @@ export function connectWebSocket(url: string): WebSocket {
   };
 
   ws.onclose = () => {
-    console.log('WebSocket disconnected');
-    // Optionally auto-reconnect logic here
+    console.log("WebSocket disconnected");
+
+    setTimeout(() => {
+      connectWebSocket(url);
+    }, 3000);
   };
 
   ws.onerror = (error) => {

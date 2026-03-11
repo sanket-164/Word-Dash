@@ -5,11 +5,7 @@ import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import TypeArea from "@/components/TypeArea";
 import Link from "next/link";
-import {
-  connectWebSocket,
-  sendMessage,
-  addMessageListener,
-} from "../../lib/websocket";
+import { sendMessage, addMessageListener } from "../../lib/websocket";
 import {
   CreateRoomMessage,
   GameWinnerClientMessage,
@@ -39,8 +35,6 @@ export default function DashPage() {
   );
 
   useEffect(() => {
-    connectWebSocket("ws://localhost:8080/ws");
-
     const removeListener = addMessageListener(async (data) => {
       const message = data;
       console.log("Message from server ", message);
@@ -121,7 +115,7 @@ export default function DashPage() {
     });
 
     return removeListener;
-  }, [userName, room]);
+  }, [userName, room, wallet.publicKey, gamePDA, vaultPDA]);
 
   const startGame = () => {
     if (!userName) {

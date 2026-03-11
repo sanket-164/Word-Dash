@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { SolanaProvider } from "./providers";
+import SolanaProvider from "@/providers/SolanaProvider";
+import WebSocketProvider from "@/providers/WebSocketProvider";
 import TopBar from "@/components/TopBar";
 
 const geistSans = Geist({
@@ -31,8 +32,10 @@ export default function RootLayout({
       >
         <div className="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
           <SolanaProvider>
-            <TopBar />
-            {children}
+            <WebSocketProvider>
+              <TopBar />
+              {children}
+            </WebSocketProvider>
           </SolanaProvider>
         </div>
       </body>
