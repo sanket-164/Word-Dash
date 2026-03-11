@@ -3,7 +3,9 @@ import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
 import idl from "../idl/game_program.json";
 import { WalletContextState } from "@solana/wallet-adapter-react";
 
-const programId = new PublicKey("BhLbReZE6jzQ2zvHxHZsahHoxKwzXiLBh3XVua2wgtaF");
+const programId = new PublicKey(
+  "BhLbReZE6jzQ2zvHxHZsahHoxKwzXiLBh3XVua2wgtaF"
+);
 
 export function getProgram(wallet: WalletContextState) {
   const connection = new Connection("https://api.devnet.solana.com");
@@ -14,9 +16,9 @@ export function getProgram(wallet: WalletContextState) {
 
   const anchorWallet = {
     publicKey: wallet.publicKey,
-    signTransaction: wallet.signTransaction!,
-    signAllTransactions: wallet.signAllTransactions!,
-  } as unknown as anchor.Wallet;
+    signTransaction: wallet.signTransaction,
+    signAllTransactions: wallet.signAllTransactions,
+  } as anchor.Wallet;
 
   const provider = new anchor.AnchorProvider(
     connection,
@@ -28,25 +30,31 @@ export function getProgram(wallet: WalletContextState) {
 }
 
 export async function initializeGame(wallet: WalletContextState) {
-
   if (!wallet.publicKey) return;
 
   const program = getProgram(wallet);
 
-  const betAmount = new anchor.BN(1_000_000); // 0.001 SOL in lamports
+  const betAmount = new anchor.BN(1_000_000);
+
+  const seed = new anchor.BN(Date.now()); // unique game seed
+  const seedBuffer = seed.toArrayLike(Buffer, "le", 8);
 
   const [gamePda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("game"), wallet.publicKey.toBuffer()],
-    program.programId,
+    [
+      Buffer.from("game"),
+      wallet.publicKey.toBuffer(),
+      seedBuffer,
+    ],
+    program.programId
   );
 
   const [vaultPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("vault"), gamePda.toBuffer()],
-    program.programId,
+    program.programId
   );
 
   await program.methods
-    .initializeGame(betAmount)
+    .initializeGame(seed, betAmount)
     .accounts({
       game: gamePda,
       vault: vaultPda,
@@ -58,13 +66,17 @@ export async function initializeGame(wallet: WalletContextState) {
   alert("Game initialized!");
 
   return {
+    seed: seed.toString(),
     gamePda: gamePda.toString(),
     vaultPda: vaultPda.toString(),
   };
 }
 
-export async function joinGame(wallet: WalletContextState, gamePda: string, vaultPda: string) {
-
+export async function joinGame(
+  wallet: WalletContextState,
+  gamePda: string,
+  vaultPda: string
+) {
   if (!wallet.publicKey) return;
 
   const program = getProgram(wallet);
@@ -82,8 +94,11 @@ export async function joinGame(wallet: WalletContextState, gamePda: string, vaul
   alert("Joined game!");
 }
 
-export async function end_game(wallet: WalletContextState, gamePda: string, vaultPda: string) {
-
+export async function endGame(
+  wallet: WalletContextState,
+  gamePda: string,
+  vaultPda: string
+) {
   if (!wallet.publicKey) return;
 
   const program = getProgram(wallet);
