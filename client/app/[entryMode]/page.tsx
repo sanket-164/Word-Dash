@@ -657,13 +657,15 @@ export default function DashPage() {
                 Play Again
               </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-5 py-3 bg-gray-800 text-white font-semibold rounded-xl border border-gray-600 hover:bg-gray-700 transition-colors"
-              >
-                <Link href="/">Main Menu</Link>
-              </motion.button>
+              <Link href="/">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-5 py-3 bg-gray-800 text-white font-semibold rounded-xl border border-gray-600 hover:bg-gray-700 transition-colors"
+                >
+                  Main Menu
+                </motion.button>
+              </Link>
             </div>
           </motion.div>
         )}
