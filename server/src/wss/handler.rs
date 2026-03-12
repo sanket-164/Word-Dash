@@ -70,7 +70,7 @@ pub async fn handle_connection(
                     } => {
                         if !current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::already_in_room(room_name),
+                                content: error::ALREADY_IN_ROOM.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -79,7 +79,7 @@ pub async fn handle_connection(
 
                         if channel_manager.channel_exists(room_name.as_str()).await {
                             let error_message = ServerMessage::Error {
-                                content: error::room_already_exists(room_name),
+                                content: error::ROOM_ALREADY_EXISTS.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -128,7 +128,7 @@ pub async fn handle_connection(
                     ClientMessage::GetRoom { player_name } => {
                         if !current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::already_in_room(current_channel.clone()),
+                                content: error::ALREADY_IN_ROOM.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -216,7 +216,7 @@ pub async fn handle_connection(
                     } => {
                         if !current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::already_in_room(current_channel.clone()),
+                                content: error::ALREADY_IN_ROOM.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -225,7 +225,7 @@ pub async fn handle_connection(
 
                         if !channel_manager.channel_exists(room_name.as_str()).await {
                             let error_message = ServerMessage::Error {
-                                content: error::room_not_found(room_name),
+                                content: error::ROOM_NOT_FOUND.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -234,7 +234,7 @@ pub async fn handle_connection(
 
                         if channel_manager.channel_full(room_name.as_str()).await {
                             let error_message = ServerMessage::Error {
-                                content: error::room_is_full(room_name),
+                                content: error::ROOM_IS_FULL.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -325,7 +325,7 @@ pub async fn handle_connection(
                     ClientMessage::StartDash {} => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::not_in_room(),
+                                content: error::NOT_IN_ROOM.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -353,7 +353,7 @@ pub async fn handle_connection(
                     ClientMessage::LeaveRoom { room_name } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::not_in_room(),
+                                content: error::NOT_IN_ROOM.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -362,7 +362,7 @@ pub async fn handle_connection(
 
                         if !channel_manager.channel_exists(room_name.as_str()).await {
                             let error_message = ServerMessage::Error {
-                                content: error::room_not_found(room_name.clone()),
+                                content: error::ROOM_NOT_FOUND.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -405,7 +405,7 @@ pub async fn handle_connection(
                     } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::not_in_room(),
+                                content: error::NOT_IN_ROOM.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -440,7 +440,7 @@ pub async fn handle_connection(
                     } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::not_in_room(),
+                                content: error::NOT_IN_ROOM.to_string(),
                             };
                             send_json_message(&tx, &error_message);
                             continue;
@@ -451,7 +451,7 @@ pub async fn handle_connection(
                             .await
                         {
                             let error_message = ServerMessage::Error {
-                                content: error::room_not_found(current_channel.clone()),
+                                content: error::ROOM_NOT_FOUND.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);
@@ -485,7 +485,7 @@ pub async fn handle_connection(
                     ClientMessage::Broadcast { content } => {
                         if current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
-                                content: error::not_in_room(),
+                                content: error::NOT_IN_ROOM.to_string(),
                             };
                             send_json_message(&tx, &error_message);
                             continue;
@@ -496,7 +496,7 @@ pub async fn handle_connection(
                             .await
                         {
                             let error_message = ServerMessage::Error {
-                                content: error::room_not_found(current_channel.clone()),
+                                content: error::ROOM_NOT_FOUND.to_string(),
                             };
 
                             send_json_message(&tx, &error_message);

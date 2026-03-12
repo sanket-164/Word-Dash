@@ -9,7 +9,7 @@ export default function WebSocketProvider({
   children: React.ReactNode;
 }) {
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/ws";
+    const url = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws";
 
     connectWebSocket(url);
 

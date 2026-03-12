@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "react-hot-toast";
 import SolanaProvider from "@/providers/SolanaProvider";
 import WebSocketProvider from "@/providers/WebSocketProvider";
 import TopBar from "@/components/TopBar";
@@ -35,6 +36,52 @@ export default function RootLayout({
             <WebSocketProvider>
               <TopBar />
               {children}
+              <Toaster
+                gutter={12}
+                toastOptions={{
+                  duration: 4000,
+                  style: {
+                    background: "rgb(31, 41, 55)",
+                    color: "#fff",
+                    border: "1px solid rgb(75, 85, 99)",
+                    borderRadius: "12px",
+                    padding: "14px 18px",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    boxShadow: "0 10px 40px rgba(0, 0, 0, 0.5)",
+                  },
+                  success: {
+                    iconTheme: {
+                      primary: "#10b981",
+                      secondary: "#fff",
+                    },
+                    style: {
+                      background: "rgb(16, 185, 129)",
+                      border: "1px solid rgb(5, 150, 105)",
+                    },
+                  },
+                  error: {
+                    iconTheme: {
+                      primary: "#ef4444",
+                      secondary: "#fff",
+                    },
+                    style: {
+                      background: "rgb(239, 68, 68)",
+                      border: "1px solid rgb(220, 38, 38)",
+                    },
+                  },
+                  loading: {
+                    iconTheme: {
+                      primary: "#06b6d4",
+                      secondary: "#fff",
+                    },
+                    style: {
+                      background: "rgb(6, 182, 212)",
+                      border: "1px solid rgb(8, 145, 178)",
+                    },
+                  },
+                }}
+              />
             </WebSocketProvider>
           </SolanaProvider>
         </div>
