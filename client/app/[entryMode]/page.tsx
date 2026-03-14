@@ -8,6 +8,8 @@ import Link from "next/link";
 import { sendMessage, addMessageListener } from "../../lib/websocket";
 import {
   CreateRoomMessage,
+  FundCreateRoomMessage,
+  FundJoinRoomMessage,
   GameWinnerClientMessage,
   GetRoomMessage,
   JoinRoomMessage,
@@ -17,6 +19,7 @@ import {
   StartDashMessage,
 } from "../types";
 import toast from "react-hot-toast";
+import { endGame, initializeGame, joinGame } from "@/lib/anchor";
 
 export default function DashPage() {
   const [start, setStart] = useState<boolean>(false);
@@ -47,10 +50,7 @@ export default function DashPage() {
       if (serverMessage.type === "NewRoom") {
         const createRoomMessage = JSON.stringify({
           type: "CreateRoom",
-          player_name: userName,
           room_name: serverMessage.room_name,
-          game_pda: gamePDA,
-          vault_pda: vaultPDA,
           pub_key: wallet.publicKey?.toString() || "",
         } as CreateRoomMessage);
         sendMessage(createRoomMessage);
@@ -58,18 +58,96 @@ export default function DashPage() {
         return;
       }
 
-      if (serverMessage.type === "JoinedRoom") {
-        setOpponentName(serverMessage.opponent_name || "Opponent");
-        setRoom(serverMessage.room_name);
-        setGamePDA(serverMessage.game_pda);
-        setVaultPDA(serverMessage.vault_pda);
+      if (serverMessage.type === "CreatedRoom") {
+        const PDAs = await initializeGame(wallet)
+          .then((PDAs) => {
+            return PDAs ? PDAs : null;
+          })
+          .catch((error) => {
+            console.error("Error initializing game: ", error);
+            toast.error("Failed to initialize game on Solana.");
+            return null;
+          });
 
-        if (serverMessage.opponent_name) {
-          const startDashMessage = JSON.stringify({
-            type: "StartDash",
-          } as StartDashMessage);
-          sendMessage(startDashMessage);
+        if (!PDAs) {
+          const leaveRoomMessage = JSON.stringify({
+            type: "LeaveRoom",
+            room_name: serverMessage.room_name,
+          } as LeaveRoomMessage);
+
+          sendMessage(leaveRoomMessage);
+          return;
         }
+
+        const { gamePda, vaultPda } = PDAs;
+
+        const fundCreateRoomMessage = JSON.stringify({
+          type: "FundCreateRoom",
+          player_name: userName,
+          room_name: serverMessage.room_name,
+          game_pda: gamePda,
+          vault_pda: vaultPda,
+          pub_key: wallet.publicKey?.toString() || "",
+        } as FundCreateRoomMessage);
+
+        sendMessage(fundCreateRoomMessage);
+        setGamePDA(gamePda);
+        setVaultPDA(vaultPda);
+        setRoom(serverMessage.room_name);
+        setStart(true);
+        setLoading(true);
+
+        return;
+      }
+
+      if (serverMessage.type === "CreateRoomFunded") {
+        toast.success("Room is created, Waiting for opponent...");
+        return;
+      }
+
+      if (serverMessage.type === "JoinedRoom") {
+        await joinGame(wallet, serverMessage.game_pda, serverMessage.vault_pda)
+          .then(() => {
+            const fundJoinRoomMessage = JSON.stringify({
+              type: "FundJoinRoom",
+              player_name: userName,
+              room_name: serverMessage.room_name,
+              game_pda: serverMessage.game_pda,
+              vault_pda: serverMessage.vault_pda,
+              pub_key: wallet.publicKey?.toString() || "",
+            } as FundJoinRoomMessage);
+
+            sendMessage(fundJoinRoomMessage);
+
+            setOpponentName(serverMessage.opponent_name);
+
+            setStart(true);
+            setLoading(true);
+            setRoom(serverMessage.room_name);
+            setGamePDA(serverMessage.game_pda);
+            setVaultPDA(serverMessage.vault_pda);
+          })
+          .catch((error) => {
+            console.error("Error joining game: ", error);
+            toast.error("Failed to join game on Solana.");
+
+            const leaveRoomMessage = JSON.stringify({
+              type: "LeaveRoom",
+              room_name: serverMessage.room_name,
+            } as LeaveRoomMessage);
+            sendMessage(leaveRoomMessage);
+          });
+
+        return;
+      }
+
+      if (serverMessage.type === "JoinRoomFunded") {
+        toast.success("Joined room, Starting game...");
+
+        const startDashMessage = JSON.stringify({
+          type: "StartDash",
+        } as StartDashMessage);
+        sendMessage(startDashMessage);
 
         return;
       }
@@ -93,12 +171,30 @@ export default function DashPage() {
       }
 
       if (serverMessage.type === "GameWinner") {
+        setWinner(serverMessage.player_name);
+
+        if (serverMessage.pub_key === wallet.publicKey?.toString()) {
+          await endGame(
+            wallet,
+            serverMessage.game_pda,
+            serverMessage.vault_pda,
+          ).catch((error) => {
+            console.error("Error ending game: ", error);
+            toast.error("Failed to end game on Solana.");
+          });
+
+          toast.success(
+            "Congratulations! You received the reward for winning! 🏆",
+          );
+        }
+
         const leaveRoomMessage = JSON.stringify({
           type: "LeaveRoom",
           room_name: room,
         } as LeaveRoomMessage);
+
         sendMessage(leaveRoomMessage);
-        setWinner(serverMessage.player_name);
+
         return;
       }
 
@@ -126,7 +222,7 @@ export default function DashPage() {
     });
 
     return removeListener;
-  }, [userName, room, wallet.publicKey, gamePDA, vaultPDA]);
+  }, [userName, room, wallet, gamePDA, vaultPDA]);
 
   useEffect(() => {
     if (gameReady && countdown > 0) {
@@ -156,11 +252,8 @@ export default function DashPage() {
         sendMessage(
           JSON.stringify({
             type: "GetRoom",
-            player_name: userName,
           } as GetRoomMessage),
         );
-        setStart(true);
-        setLoading(true);
         break;
       case "create":
         if (!room) {
@@ -176,8 +269,6 @@ export default function DashPage() {
           pub_key: wallet.publicKey?.toString() || "",
         } as CreateRoomMessage);
         sendMessage(createRoomMessage);
-        setStart(true);
-        setLoading(true);
         break;
       case "join":
         if (!room) {
@@ -186,15 +277,10 @@ export default function DashPage() {
         }
         const joinRoomMessage = JSON.stringify({
           type: "JoinRoom",
-          player_name: userName,
           room_name: room,
-          game_pda: gamePDA,
-          vault_pda: vaultPDA,
           pub_key: wallet.publicKey?.toString() || "",
         } as JoinRoomMessage);
         sendMessage(joinRoomMessage);
-        setStart(true);
-        setLoading(true);
         break;
       default:
         toast.error("Invalid game mode.");

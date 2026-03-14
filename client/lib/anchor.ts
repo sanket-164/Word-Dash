@@ -63,10 +63,7 @@ export async function initializeGame(wallet: WalletContextState) {
     })
     .rpc();
 
-  alert("Game initialized!");
-
   return {
-    seed: seed.toString(),
     gamePda: gamePda.toString(),
     vaultPda: vaultPda.toString(),
   };
@@ -90,8 +87,6 @@ export async function joinGame(
       systemProgram: SystemProgram.programId,
     })
     .rpc();
-
-  alert("Joined game!");
 }
 
 export async function endGame(
@@ -113,6 +108,4 @@ export async function endGame(
       systemProgram: SystemProgram.programId,
     })
     .rpc();
-
-  alert("Game ended!");
 }

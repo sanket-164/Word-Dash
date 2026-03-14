@@ -48,6 +48,17 @@ impl ChannelManager {
         self.available_channels.lock().await.iter().next().cloned()
     }
 
+    pub async fn add_available_channel(&self, channel_name: &str) {
+        self.available_channels
+            .lock()
+            .await
+            .insert(channel_name.to_string());
+    }
+
+    pub async fn remove_available_channel(&self, channel_name: &str) {
+        self.available_channels.lock().await.remove(channel_name);
+    }
+
     pub async fn join_channel(
         &self,
         channel_name: &str,
@@ -75,19 +86,10 @@ impl ChannelManager {
         });
 
         if opponent_pub_key.is_some() {
-            self.available_channels.lock().await.remove(&channel_name);
-
             return Opponent {
                 pub_key: opponent_pub_key,
                 channel_name: channel_name,
             };
-        }
-
-        if channel_name.starts_with("room_") {
-            self.available_channels
-                .lock()
-                .await
-                .insert(channel_name.clone());
         }
 
         Opponent {
@@ -144,6 +146,7 @@ impl ChannelManager {
         let mut channels = self.channels.lock().await;
 
         let mut should_remove = false;
+        let mut add_available_channel = false;
 
         if let Some(room) = channels.get_mut(channel_name) {
             if room
@@ -163,10 +166,23 @@ impl ChannelManager {
             if room.player1.is_none() && room.player2.is_none() {
                 should_remove = true;
             }
+
+            if room.player1.is_some() && room.player2.is_none() {
+                add_available_channel = true;
+            }
         }
 
         if should_remove {
             channels.remove(channel_name);
+            // Remove available channel if player 1 leaves before game starts
+            self.available_channels.lock().await.remove(channel_name);
+        }
+
+        if add_available_channel {
+            self.available_channels
+                .lock()
+                .await
+                .insert(channel_name.to_string());
         }
     }
 
