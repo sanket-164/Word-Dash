@@ -1,18 +1,18 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import ProgressBar from "./ProgressBar";
 import { motion } from "framer-motion";
 
 const TypeArea = ({
   text,
   enemyProgress,
-  onChange,
+  sendProgress,
   playerName = "You",
   enemyName = "Opponent",
 }: {
   text: string;
   enemyProgress: number;
-  onChange: (text: string) => void;
+  sendProgress: (textLength: number) => void;
   playerName?: string;
   enemyName?: string;
 }) => {
@@ -21,19 +21,62 @@ const TypeArea = ({
   const [correctLetters, setCorrectLetters] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
   const startTimeRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleChange = (typedText: string) => {
-    if (typedText.length > text.length) return;
+  // Auto-focus the container when the component mounts
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
 
-    // start timer when user types first character
-    if (!startTimeRef.current && typedText.length === 1) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Handle backspace (including Ctrl/Cmd + Backspace for word deletion)
+    if (e.key === "Backspace") {
+      let newText = "";
+      if (e.ctrlKey || e.metaKey) {
+        if (inputText.length === 0) {
+          newText = "";
+        } else if (/\s$/.test(inputText)) {
+          // If ends with space(s), remove all trailing spaces
+          newText = inputText.replace(/\s+$/, "");
+        } else {
+          // Otherwise, remove the last word
+          newText = inputText.replace(/\S+$/, "");
+        }
+      } else {
+        newText = inputText.slice(0, -1);
+      }
+
+      setInputText(newText);
+      if (text.startsWith(newText)) {
+        setCorrectLetters(newText.length);
+        sendProgress(newText.length);
+        setIsError(false);
+      } else {
+        setIsError(true);
+      }
+      return;
+    }
+
+    // Ignore non-character keys and combinations with ctrl/alt/meta for typing
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key.length !== 1) return;
+
+    // Stop if already completed the text
+    if (inputText.length >= text.length) return;
+
+    const newTypedText = inputText + e.key;
+    if (newTypedText.length > text.length) return;
+
+    // Start timer on first character
+    if (!startTimeRef.current && newTypedText.length === 1) {
       startTimeRef.current = Date.now();
     }
 
-    setInputText(typedText);
+    setInputText(newTypedText);
 
-    if (text.startsWith(typedText)) {
-      setCorrectLetters(typedText.length);
+    if (text.startsWith(newTypedText)) {
+      sendProgress(newTypedText.length);
+      setCorrectLetters(newTypedText.length);
       setIsError(false);
     } else {
       setIsError(true);
@@ -75,20 +118,31 @@ const TypeArea = ({
         />
       </div>
 
-      {/* Text Display */}
+      {/* Text Display & Interaction Area */}
       <motion.div
-        className="relative p-6 bg-gray-50 rounded-2xl border border-gray-200 shadow-sm"
+        ref={containerRef}
+        tabIndex={0}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        onKeyDown={handleKeyDown}
+        className="relative p-6 bg-gray-50 rounded-2xl border border-gray-200 shadow-sm outline-none focus:ring-2 focus:ring-blue-200 cursor-text"
         whileHover={{ scale: 1.01 }}
         transition={{ type: "spring", stiffness: 300 }}
       >
         <p className="text-2xl md:text-3xl font-mono leading-relaxed text-gray-800">
           {text.split("").map((char, index) => {
             let className = "transition-colors duration-100 ";
-            if (index < correctLetters) {
+            const isTyped = index < inputText.length;
+            const isCorrect = index < correctLetters;
+            const isCurrent = index === inputText.length;
+
+            if (isCorrect) {
               className += "text-green-600 font-semibold";
-            } else if (index <= inputText.length && isError) {
+            } else if (isTyped && isError) {
+              // Show the actually typed character in red if it's wrong
               className += "text-red-500 bg-red-100";
-            } else if (index <= inputText.length && isFocused) {
+            } else if (isCurrent && isFocused) {
+              // Show cursor on the next character to type
               className += "text-blue-600 border-b-2 border-blue-400";
             } else {
               className += "text-gray-400";
@@ -101,31 +155,6 @@ const TypeArea = ({
           })}
         </p>
       </motion.div>
-
-      {/* Input Area */}
-      <div className="relative">
-        <textarea
-          className={`w-full p-4 text-xl font-mono rounded-xl border-2 outline-none transition-all duration-200 resize-none
-            ${
-              isError
-                ? "border-red-400 bg-red-50 focus:border-red-500 focus:ring-4 focus:ring-red-100"
-                : correctLetters === text.length
-                  ? "border-green-400 bg-green-50"
-                  : "border-gray-300 bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-            }`}
-          placeholder="Start typing to race..."
-          value={inputText}
-          onChange={(e) => {
-            handleChange(e.target.value);
-            onChange(e.target.value);
-          }}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          disabled={correctLetters === text.length}
-          rows={3}
-          autoFocus
-        />
-      </div>
     </motion.div>
   );
 };
