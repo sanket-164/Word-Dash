@@ -34,7 +34,7 @@ export default function DashPage() {
   const wallet = useWallet();
 
   const [randomText, setRandomText] = useState(
-    "Random text will appear here once connected to a room.",
+    "Random text will appear here once connected to a room."
   );
 
   useEffect(() => {
@@ -157,7 +157,7 @@ export default function DashPage() {
           JSON.stringify({
             type: "GetRoom",
             player_name: userName,
-          } as GetRoomMessage),
+          } as GetRoomMessage)
         );
         setStart(true);
         setLoading(true);
@@ -201,32 +201,28 @@ export default function DashPage() {
     }
   };
 
-  const checkInputText = (text: string) => {
-    if (text.length > randomText.length) {
+  const sendProgress = (textLength: number) => {
+    if (textLength > randomText.length) {
       return;
     }
 
-    if (randomText.startsWith(text)) {
-      const progressMessage = JSON.stringify({
-        type: "SendProgress",
+    const progressMessage = JSON.stringify({
+      type: "SendProgress",
+      player_name: userName,
+      progress: textLength,
+    } as SendProgressMessage);
+
+    sendMessage(progressMessage);
+
+    if (textLength === randomText.length) {
+      const gameWinnerMessage = JSON.stringify({
+        type: "GameWinner",
         player_name: userName,
-        progress: text.length,
-      } as SendProgressMessage);
-
-      sendMessage(progressMessage);
-
-      if (text === randomText) {
-        const gameWinnerMessage = JSON.stringify({
-          type: "GameWinner",
-          player_name: userName,
-          game_pda: gamePDA,
-          vault_pda: vaultPDA,
-          pub_key: wallet.publicKey?.toString() || "",
-        } as GameWinnerClientMessage);
-        sendMessage(gameWinnerMessage);
-      }
-
-      return;
+        game_pda: gamePDA,
+        vault_pda: vaultPDA,
+        pub_key: wallet.publicKey?.toString() || "",
+      } as GameWinnerClientMessage);
+      sendMessage(gameWinnerMessage);
     }
   };
 
@@ -596,7 +592,7 @@ export default function DashPage() {
             <TypeArea
               text={randomText}
               enemyProgress={enemyLetters}
-              onChange={checkInputText}
+              sendProgress={sendProgress}
               playerName={userName || "You"}
               enemyName={opponentName}
             />
