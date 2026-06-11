@@ -1,10 +1,15 @@
 export type GetRoomMessage = {
   type: "GetRoom";
-  player_name: string;
 };
 
 export type CreateRoomMessage = {
   type: "CreateRoom";
+  room_name: string;
+  pub_key: string;
+};
+
+export type FundCreateRoomMessage = {
+  type: "FundCreateRoom";
   player_name: string;
   room_name: string;
   game_pda: string;
@@ -14,6 +19,12 @@ export type CreateRoomMessage = {
 
 export type JoinRoomMessage = {
   type: "JoinRoom";
+  room_name: string;
+  pub_key: string;
+};
+
+export type FundJoinRoomMessage = {
+  type: "FundJoinRoom";
   player_name: string;
   room_name: string;
   game_pda: string;
@@ -61,9 +72,25 @@ export type CreatedRoomMessage = {
   vault_pda: string,
 };
 
+export type CreateRoomFundedMessage = {
+  type: "CreateRoomFunded";
+  room_name: string;
+  game_pda: string,
+  vault_pda: string,
+};
+
 export type JoinedRoomMessage = {
   type: "JoinedRoom";
-  opponent_name: string | null;
+  opponent_name: string;
+  opponent_pubkey: string;
+  room_name: string;
+  game_pda: string;
+  vault_pda: string;
+};
+
+export type JoinRoomFundedMessage = {
+  type: "JoinRoomFunded";
+  opponent_name: string;
   room_name: string;
   game_pda: string;
   vault_pda: string;
@@ -104,7 +131,9 @@ export type ErrorMessage = {
 export type ClientMessage =
   | GetRoomMessage
   | CreateRoomMessage
+  | FundCreateRoomMessage
   | JoinRoomMessage
+  | FundJoinRoomMessage
   | StartDashMessage
   | SendProgressMessage
   | GameWinnerClientMessage
@@ -113,7 +142,9 @@ export type ClientMessage =
 
 export type ServerMessage = NewRoomMessage
   | CreatedRoomMessage
+  | CreateRoomFundedMessage
   | JoinedRoomMessage
+  | JoinRoomFundedMessage
   | OpponentJoinedMessage
   | TextMessage
   | OpponentProgressMessage
