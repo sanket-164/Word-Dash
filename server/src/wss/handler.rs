@@ -61,7 +61,11 @@ pub async fn handle_connection(
                 let msg: ClientMessage = msg.unwrap();
 
                 match msg {
-                    ClientMessage::CreateRoom { room_name, pub_key } => {
+                    ClientMessage::CreateRoom {
+                        room_name,
+                        player_name,
+                        pub_key,
+                    } => {
                         if !current_channel.is_empty() {
                             let error_message = ServerMessage::Error {
                                 content: error::ALREADY_IN_ROOM.to_string(),
@@ -82,6 +86,12 @@ pub async fn handle_connection(
 
                         channel_manager.create_channel(room_name.as_str()).await;
 
+                        if room_name.starts_with("room_") {
+                            channel_manager
+                                .add_available_channel(room_name.as_str())
+                                .await;
+                        }
+
                         let created_room_message = ServerMessage::CreatedRoom {
                             room_name: room_name.clone(),
                         };
@@ -90,6 +100,10 @@ pub async fn handle_connection(
 
                         channel_manager
                             .join_channel(room_name.as_str(), tx.clone(), pub_key.clone())
+                            .await;
+
+                        channel_manager
+                            .set_player_name(room_name.as_str(), &tx, player_name.clone())
                             .await;
 
                         current_channel = room_name.to_string();
@@ -115,10 +129,25 @@ pub async fn handle_connection(
                             continue;
                         }
 
-                        if room_name.starts_with("room_") {
-                            channel_manager
-                                .add_available_channel(room_name.as_str())
-                                .await;
+                        if !channel_manager.channel_full(room_name.as_str()).await {
+                            let error_message = ServerMessage::Error {
+                                content: error::ROOM_NOT_FOUND.to_string(),
+                            };
+
+                            send_json_message(&tx, &error_message);
+                            continue;
+                        }
+
+                        if !channel_manager
+                            .is_player1_sender(room_name.as_str(), &tx)
+                            .await
+                        {
+                            let error_message = ServerMessage::Error {
+                                content: error::ROOM_NOT_FOUND.to_string(),
+                            };
+
+                            send_json_message(&tx, &error_message);
+                            continue;
                         }
 
                         insert_player(
@@ -132,13 +161,31 @@ pub async fn handle_connection(
                         )
                         .await;
 
+                        channel_manager
+                            .mark_player_funded(room_name.as_str(), &tx)
+                            .await;
+
+                        channel_manager
+                            .set_player_name(room_name.as_str(), &tx, player_name.clone())
+                            .await;
+
                         let room_funded_message = ServerMessage::CreateRoomFunded {
                             room_name: room_name.clone(),
                             game_pda: game_pda.clone(),
                             vault_pda: vault_pda.clone(),
                         };
 
-                        send_json_message(&tx, &room_funded_message);
+                        channel_manager
+                            .send_message(
+                                room_name.as_str(),
+                                tx.clone(),
+                                Message::Text(
+                                    serde_json::to_string(&room_funded_message)
+                                        .expect("Failed to serialize room funded message")
+                                        .into(),
+                                ),
+                            )
+                            .await;
 
                         println!("CREATED ROOM FUNDED: {} ", room_name);
                     }
@@ -171,22 +218,62 @@ pub async fn handle_connection(
 
                                 println!("OPPONENT pub_key: {}", opponent_pub_key.clone());
 
-                                let opponent_player = {
-                                    let map = player_map.lock().await;
-                                    map.get(&opponent_pub_key)
-                                        .cloned()
-                                        .expect("Opponent player not found")
-                                };
+                                let opponent_player_name = channel_manager
+                                    .get_opponent_name(channel_to_join.as_str(), &tx)
+                                    .await
+                                    .unwrap_or_else(|| String::from("Opponent"));
 
                                 let joined_room_message = ServerMessage::JoinedRoom {
-                                    opponent_name: opponent_player.player_name.clone(),
+                                    opponent_name: opponent_player_name,
                                     opponent_pubkey: opponent_pub_key.clone(),
                                     room_name: channel_to_join.clone(),
-                                    game_pda: opponent_player.game_pda.clone(),
-                                    vault_pda: opponent_player.vault_pda.clone(),
+                                    game_pda: String::new(),
+                                    vault_pda: String::new(),
                                 };
 
                                 send_json_message(&tx, &joined_room_message);
+
+                                channel_manager
+                                    .remove_available_channel(channel_to_join.as_str())
+                                    .await;
+
+                                if channel_manager
+                                    .player1_funded(channel_to_join.as_str())
+                                    .await
+                                {
+                                    let opponent_player = {
+                                        let map = player_map.lock().await;
+                                        map.get(&opponent_pub_key)
+                                            .cloned()
+                                            .expect("Opponent player not found")
+                                    };
+
+                                    let room_funded_message = ServerMessage::CreateRoomFunded {
+                                        room_name: channel_to_join.clone(),
+                                        game_pda: opponent_player.game_pda.clone(),
+                                        vault_pda: opponent_player.vault_pda.clone(),
+                                    };
+
+                                    send_json_message(&tx, &room_funded_message);
+                                } else {
+                                    let room_ready_message = ServerMessage::RoomReadyForFunding {
+                                        room_name: channel_to_join.clone(),
+                                    };
+
+                                    channel_manager
+                                        .send_message(
+                                            channel_to_join.as_str(),
+                                            tx.clone(),
+                                            Message::Text(
+                                                serde_json::to_string(&room_ready_message)
+                                                    .expect(
+                                                        "Failed to serialize room ready message",
+                                                    )
+                                                    .into(),
+                                            ),
+                                        )
+                                        .await;
+                                }
 
                                 current_channel = channel_to_join;
 
@@ -244,27 +331,67 @@ pub async fn handle_connection(
 
                         current_channel = channel_opponent.channel_name;
 
+                        if room_name.starts_with("room_") {
+                            channel_manager
+                                .remove_available_channel(room_name.as_str())
+                                .await;
+                        }
+
                         if channel_opponent.pub_key.is_some() {
                             let opponent_pub_key = channel_opponent.pub_key.clone().unwrap();
 
                             println!("OPPONENT pub_key: {}", opponent_pub_key.clone());
 
-                            let opponent_player = {
-                                let map = player_map.lock().await;
-                                map.get(&opponent_pub_key)
-                                    .cloned()
-                                    .expect("Opponent player not found")
-                            };
+                            let opponent_player_name = channel_manager
+                                .get_opponent_name(current_channel.as_str(), &tx)
+                                .await
+                                .unwrap_or_else(|| String::from("Opponent"));
 
                             let joined_room_message = ServerMessage::JoinedRoom {
-                                opponent_name: opponent_player.player_name.clone(),
+                                opponent_name: opponent_player_name,
                                 opponent_pubkey: opponent_pub_key.clone(),
                                 room_name: current_channel.clone(),
-                                game_pda: opponent_player.game_pda.clone(),
-                                vault_pda: opponent_player.vault_pda.clone(),
+                                game_pda: String::new(),
+                                vault_pda: String::new(),
                             };
 
                             send_json_message(&tx, &joined_room_message);
+
+                            if channel_manager
+                                .player1_funded(current_channel.as_str())
+                                .await
+                            {
+                                let opponent_player = {
+                                    let map = player_map.lock().await;
+                                    map.get(&opponent_pub_key)
+                                        .cloned()
+                                        .expect("Opponent player not found")
+                                };
+
+                                let room_funded_message = ServerMessage::CreateRoomFunded {
+                                    room_name: current_channel.clone(),
+                                    game_pda: opponent_player.game_pda.clone(),
+                                    vault_pda: opponent_player.vault_pda.clone(),
+                                };
+
+                                send_json_message(&tx, &room_funded_message);
+                            } else {
+                                let room_ready_message = ServerMessage::RoomReadyForFunding {
+                                    room_name: current_channel.clone(),
+                                };
+
+                                channel_manager
+                                    .send_message(
+                                        current_channel.as_str(),
+                                        tx.clone(),
+                                        Message::Text(
+                                            serde_json::to_string(&room_ready_message)
+                                                .expect("Failed to serialize room ready message")
+                                                .into(),
+                                        ),
+                                    )
+                                    .await;
+                            }
                         }
 
                         println!("JOINED: {}", room_name);
@@ -288,19 +415,35 @@ pub async fn handle_connection(
                             continue;
                         }
 
-                        if room_name.starts_with("room_") {
-                            channel_manager
-                                .remove_available_channel(room_name.as_str())
-                                .await;
+                        if !channel_manager.channel_full(room_name.as_str()).await {
+                            let error_message = ServerMessage::Error {
+                                content: error::ROOM_NOT_FOUND.to_string(),
+                            };
+
+                            send_json_message(&tx, &error_message);
+                            continue;
                         }
 
-                        let room_funded_message = ServerMessage::JoinRoomFunded {
-                            room_name: room_name.clone(),
-                            game_pda: game_pda.clone(),
-                            vault_pda: vault_pda.clone(),
-                        };
+                        if !channel_manager
+                            .is_player2_sender(room_name.as_str(), &tx)
+                            .await
+                        {
+                            let error_message = ServerMessage::Error {
+                                content: error::ROOM_NOT_FOUND.to_string(),
+                            };
 
-                        send_json_message(&tx, &room_funded_message);
+                            send_json_message(&tx, &error_message);
+                            continue;
+                        }
+
+                        if !channel_manager.player1_funded(room_name.as_str()).await {
+                            let error_message = ServerMessage::Error {
+                                content: error::ROOM_NOT_FOUND.to_string(),
+                            };
+
+                            send_json_message(&tx, &error_message);
+                            continue;
+                        }
 
                         insert_player(
                             &player_map,
@@ -312,6 +455,28 @@ pub async fn handle_connection(
                             },
                         )
                         .await;
+
+                        channel_manager
+                            .set_player_name(room_name.as_str(), &tx, player_name.clone())
+                            .await;
+
+                        let join_room_funded_message = ServerMessage::JoinRoomFunded {
+                            room_name: room_name.clone(),
+                            game_pda: game_pda.clone(),
+                            vault_pda: vault_pda.clone(),
+                        };
+
+                        channel_manager
+                            .send_message(
+                                room_name.as_str(),
+                                tx.clone(),
+                                Message::Text(
+                                    serde_json::to_string(&join_room_funded_message)
+                                        .expect("Failed to serialize join room funded message")
+                                        .into(),
+                                ),
+                            )
+                            .await;
 
                         let opponent_joined_message = ServerMessage::OpponentJoined {
                             player_name: player_name.clone(),
@@ -328,6 +493,29 @@ pub async fn handle_connection(
                                 ),
                             )
                             .await;
+
+                        let should_start = channel_manager
+                            .mark_player_funded(room_name.as_str(), &tx)
+                            .await;
+
+                        if should_start && !channel_manager.game_started(room_name.as_str()).await {
+                            channel_manager.mark_game_started(room_name.as_str()).await;
+
+                            let text_message = ServerMessage::Text {
+                                content: String::from(get_random_text()),
+                            };
+
+                            channel_manager
+                                .broadcast_message(
+                                    current_channel.as_str(),
+                                    Message::Text(
+                                        serde_json::to_string(&text_message)
+                                            .expect("Failed to serialize text message")
+                                            .into(),
+                                    ),
+                                )
+                                .await;
+                        }
 
                         println!("OPPONENT JOINED: {}", room_name);
 
@@ -535,19 +723,21 @@ pub async fn handle_connection(
     }
 
     if !current_channel.is_empty() {
-        let error_message = ServerMessage::OpponentLeft {};
+        if channel_manager.game_started(current_channel.as_str()).await {
+            let error_message = ServerMessage::OpponentLeft {};
 
-        channel_manager
-            .send_message(
-                current_channel.as_str(),
-                tx.clone(),
-                Message::Text(
-                    serde_json::to_string(&error_message)
-                        .expect("Failed to serialize error message")
-                        .into(),
-                ),
-            )
-            .await;
+            channel_manager
+                .send_message(
+                    current_channel.as_str(),
+                    tx.clone(),
+                    Message::Text(
+                        serde_json::to_string(&error_message)
+                            .expect("Failed to serialize error message")
+                            .into(),
+                    ),
+                )
+                .await;
+        }
 
         let player_pub_key = channel_manager
             .get_player_pub_key(current_channel.as_str(), &tx)

@@ -16,7 +16,6 @@ import {
   LeaveRoomMessage,
   SendProgressMessage,
   ServerMessage,
-  StartDashMessage,
 } from "../types";
 import toast from "react-hot-toast";
 import { endGame, initializeGame, joinGame } from "@/lib/anchor";
@@ -37,7 +36,7 @@ export default function DashPage() {
   const wallet = useWallet();
 
   const [randomText, setRandomText] = useState(
-    "Random text will appear here once connected to a room."
+    "Random text will appear here once connected to a room.",
   );
 
   useEffect(() => {
@@ -51,6 +50,7 @@ export default function DashPage() {
         const createRoomMessage = JSON.stringify({
           type: "CreateRoom",
           room_name: serverMessage.room_name,
+          player_name: userName,
           pub_key: wallet.publicKey?.toString() || "",
         } as CreateRoomMessage);
         sendMessage(createRoomMessage);
@@ -59,6 +59,14 @@ export default function DashPage() {
       }
 
       if (serverMessage.type === "CreatedRoom") {
+        setRoom(serverMessage.room_name);
+        setStart(true);
+        setLoading(true);
+
+        return;
+      }
+
+      if (serverMessage.type === "RoomReadyForFunding") {
         const PDAs = await initializeGame(wallet)
           .then((PDAs) => {
             return PDAs ? PDAs : null;
@@ -76,6 +84,11 @@ export default function DashPage() {
           } as LeaveRoomMessage);
 
           sendMessage(leaveRoomMessage);
+          setStart(false);
+          setLoading(false);
+          setGameReady(false);
+          setCountdown(3);
+          setRoom("");
           return;
         }
 
@@ -93,19 +106,22 @@ export default function DashPage() {
         sendMessage(fundCreateRoomMessage);
         setGamePDA(gamePda);
         setVaultPDA(vaultPda);
-        setRoom(serverMessage.room_name);
+
+        return;
+      }
+
+      if (serverMessage.type === "JoinedRoom") {
+        setOpponentName(serverMessage.opponent_name);
         setStart(true);
         setLoading(true);
+        setRoom(serverMessage.room_name);
+        setGamePDA(serverMessage.game_pda || gamePDA);
+        setVaultPDA(serverMessage.vault_pda || vaultPDA);
 
         return;
       }
 
       if (serverMessage.type === "CreateRoomFunded") {
-        toast.success("Room is created, Waiting for opponent...");
-        return;
-      }
-
-      if (serverMessage.type === "JoinedRoom") {
         await joinGame(wallet, serverMessage.game_pda, serverMessage.vault_pda)
           .then(() => {
             const fundJoinRoomMessage = JSON.stringify({
@@ -119,11 +135,6 @@ export default function DashPage() {
 
             sendMessage(fundJoinRoomMessage);
 
-            setOpponentName(serverMessage.opponent_name);
-
-            setStart(true);
-            setLoading(true);
-            setRoom(serverMessage.room_name);
             setGamePDA(serverMessage.game_pda);
             setVaultPDA(serverMessage.vault_pda);
           })
@@ -136,18 +147,18 @@ export default function DashPage() {
               room_name: serverMessage.room_name,
             } as LeaveRoomMessage);
             sendMessage(leaveRoomMessage);
+            setStart(false);
+            setLoading(false);
+            setGameReady(false);
+            setCountdown(3);
+            setRoom("");
           });
 
         return;
       }
 
       if (serverMessage.type === "JoinRoomFunded") {
-        toast.success("Joined room, Starting game...");
-
-        const startDashMessage = JSON.stringify({
-          type: "StartDash",
-        } as StartDashMessage);
-        sendMessage(startDashMessage);
+        toast.success("Room is funded, starting the match...");
 
         return;
       }

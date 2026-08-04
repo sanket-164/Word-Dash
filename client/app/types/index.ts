@@ -5,6 +5,7 @@ export type GetRoomMessage = {
 export type CreateRoomMessage = {
   type: "CreateRoom";
   room_name: string;
+  player_name: string;
   pub_key: string;
 };
 
@@ -68,8 +69,11 @@ export type NewRoomMessage = {
 export type CreatedRoomMessage = {
   type: "CreatedRoom";
   room_name: string;
-  game_pda: string,
-  vault_pda: string,
+};
+
+export type RoomReadyForFundingMessage = {
+  type: "RoomReadyForFunding";
+  room_name: string;
 };
 
 export type CreateRoomFundedMessage = {
@@ -142,6 +146,7 @@ export type ClientMessage =
 
 export type ServerMessage = NewRoomMessage
   | CreatedRoomMessage
+  | RoomReadyForFundingMessage
   | CreateRoomFundedMessage
   | JoinedRoomMessage
   | JoinRoomFundedMessage

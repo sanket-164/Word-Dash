@@ -6,6 +6,7 @@ pub enum ClientMessage {
     GetRoom {},
     CreateRoom {
         room_name: String,
+        player_name: String,
         pub_key: String,
     },
     FundCreateRoom {
@@ -52,6 +53,9 @@ pub enum ServerMessage {
         room_name: String,
     },
     CreatedRoom {
+        room_name: String,
+    },
+    RoomReadyForFunding {
         room_name: String,
     },
     CreateRoomFunded {
