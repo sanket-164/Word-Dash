@@ -1,7 +1,8 @@
 "use client";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import TypeArea from "@/components/TypeArea";
 import Link from "next/link";
@@ -26,6 +27,13 @@ export default function DashPage() {
   const [enemyLetters, setEnemyLetters] = useState<number>(0);
   const [opponentName, setOpponentName] = useState<string>("Opponent");
   const [loading, setLoading] = useState<boolean>(false);
+  const [claimingReward, setClaimingReward] = useState<boolean>(false);
+  const [claimError, setClaimError] = useState<string>("");
+  const [pendingClaim, setPendingClaim] = useState<{
+    playerName: string;
+    gamePda: string;
+    vaultPda: string;
+  } | null>(null);
   const [winner, setWinner] = useState<string>("");
   const [room, setRoom] = useState<string>("");
   const params = useParams<{ entryMode: string }>();
@@ -34,9 +42,53 @@ export default function DashPage() {
   const [gameReady, setGameReady] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number>(3);
   const wallet = useWallet();
+  const router = useRouter();
 
   const [randomText, setRandomText] = useState(
     "Random text will appear here once connected to a room.",
+  );
+
+  useEffect(() => {
+    if (wallet.connecting) {
+      return;
+    }
+
+    if (!wallet.connected || !wallet.publicKey) {
+      router.replace("/");
+    }
+  }, [wallet.connected, wallet.connecting, wallet.publicKey, router]);
+
+  const claimReward = useCallback(
+    async ({
+      playerName,
+      gamePda,
+      vaultPda,
+    }: {
+      playerName: string;
+      gamePda: string;
+      vaultPda: string;
+    }) => {
+      setClaimError("");
+      setClaimingReward(true);
+
+      try {
+        await endGame(wallet, gamePda, vaultPda);
+        setWinner(playerName);
+        setClaimingReward(false);
+        setPendingClaim(null);
+        toast.success(
+          "Congratulations! You received the reward for winning! 🏆",
+        );
+      } catch (error) {
+        console.error("Error ending game: ", error);
+        toast.error("Failed to end game on Solana.");
+        setClaimingReward(false);
+        setClaimError(
+          "Unable to claim your reward right now. Please try again.",
+        );
+      }
+    },
+    [wallet],
   );
 
   useEffect(() => {
@@ -182,21 +234,23 @@ export default function DashPage() {
       }
 
       if (serverMessage.type === "GameWinner") {
-        setWinner(serverMessage.player_name);
+        const isLocalWinner =
+          serverMessage.pub_key === wallet.publicKey?.toString();
 
-        if (serverMessage.pub_key === wallet.publicKey?.toString()) {
-          await endGame(
-            wallet,
-            serverMessage.game_pda,
-            serverMessage.vault_pda,
-          ).catch((error) => {
-            console.error("Error ending game: ", error);
-            toast.error("Failed to end game on Solana.");
-          });
+        if (isLocalWinner) {
+          const claimContext = {
+            playerName: serverMessage.player_name,
+            gamePda: serverMessage.game_pda,
+            vaultPda: serverMessage.vault_pda,
+          };
 
-          toast.success(
-            "Congratulations! You received the reward for winning! 🏆",
-          );
+          setPendingClaim(claimContext);
+          await claimReward(claimContext);
+        } else {
+          setWinner(serverMessage.player_name);
+          setClaimingReward(false);
+          setClaimError("");
+          setPendingClaim(null);
         }
 
         const leaveRoomMessage = JSON.stringify({
@@ -233,7 +287,7 @@ export default function DashPage() {
     });
 
     return removeListener;
-  }, [userName, room, wallet, gamePDA, vaultPDA]);
+  }, [userName, room, wallet, gamePDA, vaultPDA, claimReward]);
 
   useEffect(() => {
     if (gameReady && countdown > 0) {
@@ -252,6 +306,11 @@ export default function DashPage() {
   }, [gameReady, countdown]);
 
   const startGame = () => {
+    if (!wallet.connected || !wallet.publicKey) {
+      toast.error("Connect your wallet before starting a match.");
+      return;
+    }
+
     if (!userName) {
       toast.error("Name is required to start the game.");
       return;
@@ -679,20 +738,72 @@ export default function DashPage() {
         )}
 
         {/* Game Area - TypeArea */}
-        {start && !loading && !gameReady && !winner && (
+        {start &&
+          !loading &&
+          !gameReady &&
+          !winner &&
+          !claimingReward &&
+          !claimError && (
+            <motion.div
+              key="game"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full max-w-4xl"
+            >
+              <TypeArea
+                text={randomText}
+                enemyProgress={enemyLetters}
+                sendProgress={sendProgress}
+                playerName={userName || "You"}
+                enemyName={opponentName}
+              />
+            </motion.div>
+          )}
+
+        {/* Claim Reward Screen */}
+        {claimingReward && (
           <motion.div
-            key="game"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-4xl"
+            key="claiming-reward"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            className="text-center"
           >
-            <TypeArea
-              text={randomText}
-              enemyProgress={enemyLetters}
-              sendProgress={sendProgress}
-              playerName={userName || "You"}
-              enemyName={opponentName}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="inline-block w-20 h-20 border-4 border-gray-700 border-t-cyan-500 rounded-full mb-6"
             />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Claiming your Solana reward...
+            </h3>
+            <p className="text-gray-400">
+              Please approve the transaction in your wallet.
+            </p>
+          </motion.div>
+        )}
+
+        {/* Claim Error Screen */}
+        {claimError && !winner && (
+          <motion.div
+            key="claim-error"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            className="text-center max-w-md"
+          >
+            <div className="mb-4 text-5xl">⚠️</div>
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Claim failed
+            </h3>
+            <p className="text-gray-400 mb-6">{claimError}</p>
+            <button
+              type="button"
+              onClick={() => pendingClaim && claimReward(pendingClaim)}
+              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-xl shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:shadow-cyan-500/40 hover:from-cyan-400 hover:to-blue-500 transition-all duration-200"
+            >
+              Retry claim
+            </button>
           </motion.div>
         )}
 
@@ -745,6 +856,9 @@ export default function DashPage() {
                   setVaultPDA("vaultPDA");
                   setOpponentName("Opponent");
                   setLoading(false);
+                  setClaimingReward(false);
+                  setClaimError("");
+                  setPendingClaim(null);
                 }}
               >
                 Play Again

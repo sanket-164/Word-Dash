@@ -2,7 +2,7 @@ services:
   server:
     build: ./server
     ports:
-      - "8000:8000"
+      - "8000:80"
 
   client:
     build:

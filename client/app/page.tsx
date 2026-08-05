@@ -1,8 +1,13 @@
 "use client";
-import Link from "next/link";
 import { motion } from "framer-motion";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 export default function Home() {
+  const wallet = useWallet();
+  const router = useRouter();
+
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -14,6 +19,15 @@ export default function Home() {
   const item = {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0 },
+  };
+
+  const handleProtectedNavigation = (href: string) => {
+    if (!wallet.connected || !wallet.publicKey) {
+      toast.error("Connect your wallet before choosing a match mode.");
+      return;
+    }
+
+    router.push(href);
   };
 
   return (
@@ -52,35 +66,32 @@ export default function Home() {
           variants={item}
           className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
         >
-          <Link href="/random">
-            <motion.button
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center gap-2"
-            >
-              🎲 Random Match
-            </motion.button>
-          </Link>
+          <motion.button
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleProtectedNavigation("/random")}
+            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            🎲 Random Match
+          </motion.button>
 
-          <Link href="/create">
-            <motion.button
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto px-8 py-4 bg-gray-800 text-blue-400 font-semibold rounded-xl shadow-md border border-gray-700 hover:border-blue-400 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
-            >
-              🔐 Create Room
-            </motion.button>
-          </Link>
+          <motion.button
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleProtectedNavigation("/create")}
+            className="w-full sm:w-auto px-8 py-4 bg-gray-800 text-blue-400 font-semibold rounded-xl shadow-md border border-gray-700 hover:border-blue-400 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            🔐 Create Room
+          </motion.button>
 
-          <Link href="/join">
-            <motion.button
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full sm:w-auto px-8 py-4 bg-gray-800 text-purple-400 font-semibold rounded-xl shadow-md border border-gray-700 hover:border-purple-400 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
-            >
-              🚪 Join Room
-            </motion.button>
-          </Link>
+          <motion.button
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleProtectedNavigation("/join")}
+            className="w-full sm:w-auto px-8 py-4 bg-gray-800 text-purple-400 font-semibold rounded-xl shadow-md border border-gray-700 hover:border-purple-400 hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            🚪 Join Room
+          </motion.button>
         </motion.div>
 
         {/* Features */}
