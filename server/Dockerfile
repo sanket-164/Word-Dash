@@ -25,6 +25,6 @@ RUN apt-get update && \
 
 COPY --from=builder /app/target/release/server /usr/local/bin/server
 
-EXPOSE 8000
+EXPOSE 80
 
 CMD ["server"]

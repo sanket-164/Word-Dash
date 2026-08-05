@@ -1,0 +1,18 @@
+{
+  "services": {
+    "rust": {
+      "root": ".",
+      "entrypoint": "Dockerfile"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": { "service": "rust" }
+    },
+    {
+      "source": "/",
+      "destination": { "service": "rust" }
+    }
+  ]
+}
