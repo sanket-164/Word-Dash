@@ -1,4 +1,5 @@
 "use client";
+
 import { motion } from "framer-motion";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
@@ -30,13 +31,40 @@ export default function Home() {
     router.push(href);
   };
 
+  const features = [
+    {
+      icon: "⚡",
+      desc: "Real-time duels",
+    },
+    {
+      icon: "🌐",
+      desc: "Decentralized",
+    },
+    {
+      icon: "⛓️",
+      desc: "Powered by Solana",
+    },
+    {
+      icon: "💰",
+      desc: "On-chain rewards",
+    },
+    {
+      icon: "👛",
+      desc: "Play with wallet",
+    },
+    {
+      icon: "⚔️",
+      desc: "Challenge your friends",
+    },
+  ];
+
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
       <motion.div
         variants={container}
         initial="hidden"
         animate="show"
-        className="container mx-auto px-4 py-12 max-w-2xl text-center"
+        className="container mx-auto px-4 py-12 max-w-3xl text-center"
       >
         {/* Logo */}
         <motion.div variants={item} className="mb-8">
@@ -57,7 +85,7 @@ export default function Home() {
 
           <p className="text-xl text-gray-400 max-w-lg mx-auto">
             Challenge friends or random players in real-time typing duels. Fast
-            fingers win! 🏆
+            fingers win! 🏁
           </p>
         </motion.div>
 
@@ -99,26 +127,47 @@ export default function Home() {
           variants={item}
           className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left"
         >
-          {[
-            {
-              icon: "⚡",
-              title: "Real-time",
-              desc: "Live sync with opponents",
-            },
-            { icon: "🌍", title: "Global", desc: "Play with anyone, anywhere" },
-            { icon: "🏅", title: "Rewards", desc: "Earn tokens for victories" },
-          ].map((feature, i) => (
+          {features.map((feature, i) => (
             <motion.div
               key={i}
               whileHover={{ y: -4 }}
-              className="p-4 bg-gray-800/70 backdrop-blur-md rounded-xl border border-gray-700"
+              className="p-4 bg-gray-800/70 backdrop-blur-md rounded-xl border border-gray-700 text-center"
             >
-              <div className="text-2xl mb-2">{feature.icon}</div>
-              <h3 className="font-semibold text-white mb-1">{feature.title}</h3>
-              <p className="text-sm text-gray-400">{feature.desc}</p>
+              <div className="text-2xl flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500/25 via-white/5 to-cyan-500/25 ring-1 ring-white/10 shadow-lg shadow-indigo-500/10 mx-auto mb-4">
+                <span>{feature.icon}</span>
+              </div>
+
+              <h3 className="font-semibold text-white mb-1 text-center">
+                {feature.desc}
+              </h3>
             </motion.div>
           ))}
         </motion.div>
+
+        <div className="mx-auto flex max-w-6xl items-center justify-center px-4 mt-12 py-6">
+          <motion.a
+            whileHover={{ scale: 1.15, y: -3 }}
+            whileTap={{ scale: 0.95 }}
+            href="https://github.com/sanket-164/Word-Dash"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-500 transition-colors duration-300 hover:text-white"
+            aria-label="View source on GitHub"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-10 w-10"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </motion.a>
+        </div>
       </motion.div>
     </div>
   );

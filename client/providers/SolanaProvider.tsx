@@ -13,6 +13,14 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 
 const AGREEMENT_STORAGE_PREFIX = "worddash-wallet-guidelines-accepted";
 
+const DASH_RULES = [
+  "Player must have a Solana wallet with solana available in DEVNET as the game only supports DEVNET.",
+  "You must approve the smart contract transaction to lock your entry fee into the escrow vault before the match begins.",
+  "If you win, you must manually approve the on-chain transaction to claim the prize pool. Failing to sign the claim transaction will result in losing your winnings.",
+  "Disconnecting, closing the tab, or losing connection during an active match results in an automatic loss. Your opponent will be awarded the entire pot.",
+  "Players are responsible for all Solana network fees (gas) required to fund the escrow and claim winnings.",
+];
+
 function WalletGuidelinesGate({ children }: { children: React.ReactNode }) {
   const wallet = useWallet();
   const [showModal, setShowModal] = useState(false);
@@ -79,51 +87,21 @@ function WalletGuidelinesGate({ children }: { children: React.ReactNode }) {
               </h2>
 
               <ul className="mt-7 space-y-3">
-                <li className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] p-4 pl-7">
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 w-1.5 rounded-r-full bg-cyan-400"
-                  />
-                  <span className="block text-sm leading-6 text-gray-300">
-                    You must approve the smart contract transaction to lock your
-                    entry fee into the escrow vault before the match begins.
-                  </span>
-                </li>
+                {DASH_RULES.map((rule, i) => (
+                  <li
+                    key={i}
+                    className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] p-4 pl-7"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-y-0 left-0 w-1.5 rounded-r-full bg-cyan-400"
+                    />
 
-                <li className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] p-4 pl-7">
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 w-1.5 rounded-r-full bg-cyan-400"
-                  />
-                  <span className="block text-sm leading-6 text-gray-300">
-                    If you win, you must manually approve the on-chain
-                    transaction to claim the prize pool. Failing to sign the
-                    claim transaction will result in losing your winnings.
-                  </span>
-                </li>
-
-                <li className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] p-4 pl-7">
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 w-1.5 rounded-r-full bg-cyan-400"
-                  />
-                  <span className="block text-sm leading-6 text-gray-300">
-                    Disconnecting, closing the tab, or losing connection during
-                    an active match results in an automatic loss. Your opponent
-                    will be awarded the entire pot.
-                  </span>
-                </li>
-
-                <li className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] p-4 pl-7">
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-0 w-1.5 rounded-r-full bg-cyan-400"
-                  />
-                  <span className="block text-sm leading-6 text-gray-300">
-                    Players are responsible for all Solana network fees (gas)
-                    required to fund the escrow and claim winnings.
-                  </span>
-                </li>
+                    <span className="block text-sm leading-6 text-gray-300">
+                      {rule}
+                    </span>
+                  </li>
+                ))}
               </ul>
 
               <label
