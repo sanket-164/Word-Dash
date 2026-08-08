@@ -1,14 +1,20 @@
-{
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/game_program.json`.
+ */
+export type GameProgram = {
   "address": "BhLbReZE6jzQ2zvHxHZsahHoxKwzXiLBh3XVua2wgtaF",
   "metadata": {
-    "name": "game_program",
+    "name": "gameProgram",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
   },
   "instructions": [
     {
-      "name": "cancel_game",
+      "name": "cancelGame",
       "discriminator": [
         121,
         194,
@@ -55,14 +61,14 @@
           ]
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "end_game",
+      "name": "endGame",
       "discriminator": [
         224,
         135,
@@ -105,7 +111,7 @@
           "writable": true
         },
         {
-          "name": "winner_account",
+          "name": "winnerAccount",
           "writable": true
         },
         {
@@ -113,7 +119,7 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -125,7 +131,7 @@
       ]
     },
     {
-      "name": "initialize_game",
+      "name": "initializeGame",
       "discriminator": [
         44,
         62,
@@ -190,7 +196,7 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -200,13 +206,13 @@
           "type": "u64"
         },
         {
-          "name": "bet_amount",
+          "name": "betAmount",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "join_game",
+      "name": "joinGame",
       "discriminator": [
         107,
         112,
@@ -250,7 +256,7 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -259,7 +265,7 @@
   ],
   "accounts": [
     {
-      "name": "Game",
+      "name": "game",
       "discriminator": [
         27,
         90,
@@ -275,48 +281,48 @@
   "errors": [
     {
       "code": 6000,
-      "name": "GameFull",
+      "name": "gameFull",
       "msg": "Game already has 2 players"
     },
     {
       "code": 6001,
-      "name": "GameNotFull",
+      "name": "gameNotFull",
       "msg": "Game does not have 2 players yet"
     },
     {
       "code": 6002,
-      "name": "GameInactive",
+      "name": "gameInactive",
       "msg": "Game is not active"
     },
     {
       "code": 6003,
-      "name": "InvalidWinner",
+      "name": "invalidWinner",
       "msg": "Invalid winner"
     },
     {
       "code": 6004,
-      "name": "InvalidAuthority",
+      "name": "invalidAuthority",
       "msg": "Invalid authority"
     },
     {
       "code": 6005,
-      "name": "InvalidWinnerAccount",
+      "name": "invalidWinnerAccount",
       "msg": "Winner account does not match"
     },
     {
       "code": 6006,
-      "name": "InvalidPlayer1",
+      "name": "invalidPlayer1",
       "msg": "Invalid player1 account"
     },
     {
       "code": 6007,
-      "name": "GameAlreadyJoined",
+      "name": "gameAlreadyJoined",
       "msg": "Cannot cancel: Player 2 has already joined"
     }
   ],
   "types": [
     {
-      "name": "Game",
+      "name": "game",
       "type": {
         "kind": "struct",
         "fields": [
@@ -329,7 +335,7 @@
             "type": "pubkey"
           },
           {
-            "name": "bet_amount",
+            "name": "betAmount",
             "type": "u64"
           },
           {
@@ -337,7 +343,7 @@
             "type": "pubkey"
           },
           {
-            "name": "is_active",
+            "name": "isActive",
             "type": "bool"
           },
           {
@@ -345,11 +351,11 @@
             "type": "u64"
           },
           {
-            "name": "vault_bump",
+            "name": "vaultBump",
             "type": "u8"
           }
         ]
       }
     }
   ]
-}
+};

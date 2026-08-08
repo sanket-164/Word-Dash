@@ -53,9 +53,10 @@ pub mod game_program {
     }
 
     pub fn end_game(ctx: Context<EndGame>, winner: Pubkey) -> Result<()> {
-        let game = &mut ctx.accounts.game;
+        let game = &ctx.accounts.game;
 
         require!(game.is_active, ErrorCode::GameInactive);
+        require!(game.player2 != Pubkey::default(), ErrorCode::GameNotFull);
 
         require!(
             winner == game.player1 || winner == game.player2,
@@ -67,11 +68,8 @@ pub mod game_program {
             ErrorCode::InvalidWinnerAccount
         );
 
-        game.winner = winner;
-        game.is_active = false;
-
+        // 1. Transfer the bet winnings from the vault to the winner
         let vault_balance = game.bet_amount * 2;
-
         **ctx
             .accounts
             .vault
@@ -79,6 +77,25 @@ pub mod game_program {
             .try_borrow_mut_lamports()? -= vault_balance;
         **ctx.accounts.winner_account.try_borrow_mut_lamports()? += vault_balance;
 
+        // 2. Drain the remaining SOL (rent) from the vault back to player1
+        let vault_rent = ctx.accounts.vault.to_account_info().lamports();
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= vault_rent;
+        **ctx.accounts.player1.to_account_info().try_borrow_mut_lamports()? += vault_rent;
+        
+        Ok(())
+    }
+
+    pub fn cancel_game(ctx: Context<CancelGame>) -> Result<()> {
+        // 1. Refund the initial bet amount from the vault to player1
+        let bet_amount = ctx.accounts.game.bet_amount;
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= bet_amount;
+        **ctx.accounts.player1.to_account_info().try_borrow_mut_lamports()? += bet_amount;
+
+        // 2. Drain the vault rent back to player1
+        let vault_rent = ctx.accounts.vault.to_account_info().lamports();
+        **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= vault_rent;
+        **ctx.accounts.player1.to_account_info().try_borrow_mut_lamports()? += vault_rent;
+        
         Ok(())
     }
 }
@@ -95,8 +112,7 @@ pub struct InitializeGame<'info> {
     )]
     pub game: Account<'info, Game>,
 
-    /// CHECK: This is a PDA used only as a SOL vault for the game.
-    /// It is derived using seeds [b"vault", game.key()] and controlled by the program.
+    /// CHECK: This is a PDA used only as a SOL vault for the game. It is initialized with space = 0.
     #[account(
         init,
         payer = player1,
@@ -117,7 +133,7 @@ pub struct JoinGame<'info> {
     #[account(mut)]
     pub game: Account<'info, Game>,
 
-    /// CHECK: PDA that holds SOL for the game
+    /// CHECK: PDA that holds SOL for the game. Validated via seeds and bump.
     #[account(
         mut,
         seeds = [b"vault", game.key().as_ref()],
@@ -133,10 +149,14 @@ pub struct JoinGame<'info> {
 
 #[derive(Accounts)]
 pub struct EndGame<'info> {
-    #[account(mut)]
+    #[account(
+        mut, 
+        close = player1, 
+        constraint = game.is_active @ ErrorCode::GameInactive
+    )]
     pub game: Account<'info, Game>,
 
-    /// CHECK: PDA that holds SOL for the game
+    /// CHECK: PDA that holds SOL for the game. Validated via seeds and bump.
     #[account(
         mut,
         seeds = [b"vault", game.key().as_ref()],
@@ -144,11 +164,42 @@ pub struct EndGame<'info> {
     )]
     pub vault: UncheckedAccount<'info>,
 
-    /// CHECK: validated in instruction
+    /// CHECK: The original payer of the game account, who gets the rent back. Validated via constraint.
+    #[account(
+        mut,
+        constraint = player1.key() == game.player1 @ ErrorCode::InvalidPlayer1
+    )]
+    pub player1: AccountInfo<'info>,
+
+    /// CHECK: Validated in instruction logic to match the winner.
     #[account(mut)]
     pub winner_account: AccountInfo<'info>,
 
     pub authority: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CancelGame<'info> {
+    #[account(
+        mut, 
+        close = player1,
+        has_one = player1 @ ErrorCode::InvalidAuthority,
+        constraint = game.player2 == Pubkey::default() @ ErrorCode::GameAlreadyJoined
+    )]
+    pub game: Account<'info, Game>,
+
+    /// CHECK: PDA that holds SOL for the game. Validated via seeds and bump.
+    #[account(
+        mut,
+        seeds = [b"vault", game.key().as_ref()],
+        bump = game.vault_bump
+    )]
+    pub vault: UncheckedAccount<'info>,
+
+    #[account(mut)]
+    pub player1: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -170,6 +221,9 @@ pub enum ErrorCode {
     #[msg("Game already has 2 players")]
     GameFull,
 
+    #[msg("Game does not have 2 players yet")]
+    GameNotFull,
+
     #[msg("Game is not active")]
     GameInactive,
 
@@ -181,4 +235,10 @@ pub enum ErrorCode {
 
     #[msg("Winner account does not match")]
     InvalidWinnerAccount,
+
+    #[msg("Invalid player1 account")]
+    InvalidPlayer1,
+
+    #[msg("Cannot cancel: Player 2 has already joined")]
+    GameAlreadyJoined,
 }

@@ -72,7 +72,7 @@ export default function DashPage() {
       setClaimingReward(true);
 
       try {
-        await endGame(wallet, gamePda, vaultPda);
+        await endGame(wallet, gamePda, vaultPda, wallet.publicKey!);
         setWinner(playerName);
         setClaimingReward(false);
         setPendingClaim(null);
