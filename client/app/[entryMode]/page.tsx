@@ -449,7 +449,17 @@ export default function DashPage() {
   };
 
   return (
-    <div className="container mx-auto p-4 min-h-[calc(100vh-64px)] flex items-center justify-center">
+    <div className="container mx-auto p-4 min-h-[calc(100vh-64px)] flex items-center justify-center relative">
+      {!start && (
+        <Link
+          href="/"
+          className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-900/80 px-4 py-2 text-sm font-semibold text-gray-200 shadow-lg shadow-black/20 backdrop-blur-sm transition-colors hover:border-cyan-400/50 hover:bg-gray-800/90 hover:text-white"
+        >
+          <span aria-hidden="true">←</span>
+          Back
+        </Link>
+      )}
+
       <AnimatePresence mode="wait">
         {/* Setup Screen */}
         {!start && (
