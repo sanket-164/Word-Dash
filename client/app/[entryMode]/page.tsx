@@ -19,7 +19,15 @@ import {
   ServerMessage,
 } from "../types";
 import toast from "react-hot-toast";
-import { endGame, initializeGame, joinGame } from "@/lib/anchor";
+import {
+  cancelGame as cancelOnChainGame,
+  endGame,
+  initializeGame,
+  joinGame,
+} from "@/lib/anchor";
+
+const INITIAL_RANDOM_TEXT =
+  "Random text will appear here once connected to a room.";
 
 export default function DashPage() {
   const [start, setStart] = useState<boolean>(false);
@@ -27,6 +35,7 @@ export default function DashPage() {
   const [enemyLetters, setEnemyLetters] = useState<number>(0);
   const [opponentName, setOpponentName] = useState<string>("Opponent");
   const [loading, setLoading] = useState<boolean>(false);
+  const [cancellingRoom, setCancellingRoom] = useState<boolean>(false);
   const [claimingReward, setClaimingReward] = useState<boolean>(false);
   const [claimError, setClaimError] = useState<string>("");
   const [pendingClaim, setPendingClaim] = useState<{
@@ -41,12 +50,30 @@ export default function DashPage() {
   const [vaultPDA, setVaultPDA] = useState("vaultPDA");
   const [gameReady, setGameReady] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number>(3);
+  const [isPlayerOne, setIsPlayerOne] = useState<boolean>(false);
   const wallet = useWallet();
   const router = useRouter();
 
-  const [randomText, setRandomText] = useState(
-    "Random text will appear here once connected to a room.",
-  );
+  const [randomText, setRandomText] = useState(INITIAL_RANDOM_TEXT);
+
+  const resetMatchState = useCallback(() => {
+    setStart(false);
+    setLoading(false);
+    setGameReady(false);
+    setCountdown(3);
+    setRoom("");
+    setRandomText(INITIAL_RANDOM_TEXT);
+    setEnemyLetters(0);
+    setOpponentName("Opponent");
+    setWinner("");
+    setClaimingReward(false);
+    setClaimError("");
+    setPendingClaim(null);
+    setGamePDA("gamePDA");
+    setVaultPDA("vaultPDA");
+    setIsPlayerOne(false);
+    setCancellingRoom(false);
+  }, []);
 
   useEffect(() => {
     if (wallet.connecting) {
@@ -91,6 +118,43 @@ export default function DashPage() {
     [wallet],
   );
 
+  const handleCancelRoom = useCallback(async () => {
+    if (!room) {
+      return;
+    }
+
+    setCancellingRoom(true);
+
+    try {
+      const canRefund =
+        isPlayerOne && gamePDA !== "gamePDA" && vaultPDA !== "vaultPDA";
+
+      if (canRefund) {
+        await cancelOnChainGame(wallet, gamePDA, vaultPDA);
+        toast.success("Match canceled and your stake was refunded.");
+      } else {
+        toast.success("Room search canceled.");
+      }
+
+      sendMessage(
+        JSON.stringify({
+          type: "LeaveRoom",
+          room_name: room,
+        } as LeaveRoomMessage),
+      );
+
+      resetMatchState();
+    } catch (error) {
+      console.error("Error canceling room: ", error);
+      toast.error(
+        isPlayerOne && gamePDA !== "gamePDA" && vaultPDA !== "vaultPDA"
+          ? "Failed to cancel the game on Solana."
+          : "Failed to leave the room.",
+      );
+      setCancellingRoom(false);
+    }
+  }, [gamePDA, isPlayerOne, resetMatchState, room, vaultPDA, wallet]);
+
   useEffect(() => {
     const removeListener = addMessageListener(async (data) => {
       const message = data;
@@ -114,6 +178,7 @@ export default function DashPage() {
         setRoom(serverMessage.room_name);
         setStart(true);
         setLoading(true);
+        setIsPlayerOne(true);
 
         return;
       }
@@ -158,6 +223,7 @@ export default function DashPage() {
         sendMessage(fundCreateRoomMessage);
         setGamePDA(gamePda);
         setVaultPDA(vaultPda);
+        setIsPlayerOne(true);
 
         return;
       }
@@ -169,6 +235,7 @@ export default function DashPage() {
         setRoom(serverMessage.room_name);
         setGamePDA(serverMessage.game_pda || gamePDA);
         setVaultPDA(serverMessage.vault_pda || vaultPDA);
+        setIsPlayerOne(false);
 
         return;
       }
@@ -280,14 +347,13 @@ export default function DashPage() {
       if (serverMessage.type === "Error") {
         console.log("Error from server: ", serverMessage.content);
         toast.error(serverMessage.content);
-        setStart(false);
-        setLoading(false);
+        resetMatchState();
         return;
       }
     });
 
     return removeListener;
-  }, [userName, room, wallet, gamePDA, vaultPDA, claimReward]);
+  }, [userName, room, wallet, gamePDA, vaultPDA, claimReward, resetMatchState]);
 
   useEffect(() => {
     if (gameReady && countdown > 0) {
@@ -502,6 +568,20 @@ export default function DashPage() {
                 : "⏳ Waiting for player..."}
             </h3>
             <p className="text-gray-400">Get your fingers ready!</p>
+            <button
+              type="button"
+              onClick={handleCancelRoom}
+              disabled={cancellingRoom}
+              className="mt-6 inline-flex items-center justify-center rounded-xl border border-red-500/40 bg-red-500/10 px-5 py-3 text-sm font-semibold text-red-200 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {cancellingRoom
+                ? "Canceling..."
+                : isPlayerOne &&
+                    gamePDA !== "gamePDA" &&
+                    vaultPDA !== "vaultPDA"
+                  ? "End Game & Refund"
+                  : "Cancel Search"}
+            </button>
           </motion.div>
         )}
 
@@ -845,20 +925,7 @@ export default function DashPage() {
                 whileTap={{ scale: 0.95 }}
                 className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-xl shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:shadow-cyan-500/40 hover:from-cyan-400 hover:to-blue-500 transition-all duration-200"
                 onClick={() => {
-                  setStart(false);
-                  setWinner("");
-                  setEnemyLetters(0);
-                  setRandomText("");
-                  setRoom("");
-                  setGameReady(false);
-                  setCountdown(3);
-                  setGamePDA("gamePDA");
-                  setVaultPDA("vaultPDA");
-                  setOpponentName("Opponent");
-                  setLoading(false);
-                  setClaimingReward(false);
-                  setClaimError("");
-                  setPendingClaim(null);
+                  resetMatchState();
                 }}
               >
                 Play Again
