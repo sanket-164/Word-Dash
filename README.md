@@ -1,4 +1,4 @@
-# Word Dash
+# Word Dash (<a href="https://word-dash.netlify.app/" target="__blank">**Play**</a>)
 
 Word Dash is a real-time multiplayer typing game built with Rust, Next.js, WebSockets, and Solana. Challenge another player in a fast-paced typing race, stake SOL through an on-chain Anchor smart contract, and automatically claim the winner’s reward from a shared vault. Features Quick Match, private rooms, real-time typing progress, on-chain staking, automatic payouts, and retryable blockchain claims.
 
