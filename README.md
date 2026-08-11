@@ -12,11 +12,11 @@ Word Dash is a real-time multiplayer typing game built with Rust, Next.js, WebSo
 
 ## Watch Demo of the game
 
-<a href="https://www.youtube.com/watch?v=SclogtiXu8c">
-    <div align="center" style="border: 1px solid #38bdf8; padding: 10px; border-radius: 5px; background-color: #0b0f1a;">
-        <img src="./client/public/logo.png" alt="Watch the video" height="300" />
-    </div>
-</a>
+<div align="center"">
+  <a href="https://www.youtube.com/watch?v=SclogtiXu8c">
+    <img src="./client/public/logo.png" alt="Watch the video" height="400" />
+  </a>
+</div>
 
 ## Technologies
 
